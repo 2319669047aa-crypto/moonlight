@@ -31,23 +31,6 @@ function createEmojiIcon(emoji) {
   return 'image://' + canvas.toDataURL();
 }
 
-// 🎨 智能图标匹配函数
-function getCategoryIcon(name) {
-  if (!name) return '💰';
-  if (name.includes('餐') || name.includes('饭') || name.includes('吃') || name.includes('面') || name.includes('粉')) return '🍔';
-  if (name.includes('奶茶') || name.includes('咖啡') || name.includes('水') || name.includes('喝')) return '🥤';
-  if (name.includes('车') || name.includes('交通') || name.includes('油') || name.includes('路') || name.includes('铁') || name.includes('飞')) return '🚕';
-  if (name.includes('衣') || name.includes('裤') || name.includes('鞋') || name.includes('妆')) return '👗';
-  if (name.includes('房') || name.includes('住') || name.includes('电') || name.includes('网')) return '🏠';
-  if (name.includes('药') || name.includes('医')) return '💊';
-  if (name.includes('猫') || name.includes('狗') || name.includes('宠')) return '🐱';
-  if (name.includes('书') || name.includes('学') || name.includes('课')) return '📚';
-  if (name.includes('玩') || name.includes('游') || name.includes('影') || name.includes('KTV')) return '🎮';
-  if (name.includes('日用') || name.includes('纸') || name.includes('洗') || name.includes('超')) return '🧻';
-  if (name.includes('果') || name.includes('菜')) return '🍎';
-  return '💰'; // 默认图标
-}
-
 // === 页面加载入口 ===
 window.onload = function() {
   loadData();
@@ -110,7 +93,7 @@ function addBill() {
   moneyInput.value = ''; itemInput.value = '';
 }
 
-// 核心渲染函数：集成智能图标显示
+// 渲染函数：恢复为无图标的简洁列表
 function renderAllTransactions() {
   const container = document.getElementById('bill-container');
   if(!container) return;
@@ -130,14 +113,10 @@ function renderAllTransactions() {
     groupDiv.innerHTML = `<div class="date-header" onclick="toggleThisGroup(this)"><span>${dateStr} <span style="font-size:12px;color:#999;margin-left:5px">¥${dayTotal}</span></span><i class="fas fa-chevron-down arrow-icon"></i></div><div class="date-content"></div>`;
     const contentDiv = groupDiv.querySelector('.date-content');
     groups[dateStr].forEach(t => {
-      const icon = getCategoryIcon(t.item);
       const billDiv = document.createElement('div');
       billDiv.className = 'bill-item';
       billDiv.innerHTML = `
-        <div class="bill-left-wrapper">
-           <div class="bill-icon-box">${icon}</div>
-           <span class="bill-name">${t.item}</span>
-        </div>
+        <span class="bill-name">${t.item}</span>
         <div class="bill-right">
           <span class="bill-money">-${t.money}</span>
           <i class="fas fa-edit bill-edit-btn" onclick="openEditBillModal(${t.id})" title="修改日期"></i>
@@ -522,9 +501,6 @@ function renderMindMapWithData(list) {
 }
 function switchMindMapMode(m) { mindMapMode=m; document.getElementById('btn-fruit').classList.toggle('active',m==='fruit'); document.getElementById('btn-flower').classList.toggle('active',m==='flower'); const s=document.getElementById('mindmap-start-date').value; const e=document.getElementById('mindmap-end-date').value; generateMindMapWithDate(s,e); }
 
-// ==========================================
-// 🟢 补全：日期确认按钮的处理逻辑
-// ==========================================
 function handleDateConfirm() {
   const s = document.getElementById('common-start-date').value;
   const e = document.getElementById('common-end-date').value;
