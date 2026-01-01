@@ -15,6 +15,8 @@ let currentImageBase64 = null;
 let mindMapMode = 'fruit';
 let datePickerMode = 'tree'; 
 let currentMemoFilter = null; 
+// 密码编辑状态
+let editingPassId = null;
 
 const monthFruits = ['🍊','🍓','🍍','🍒','🍈','🍑','🍉','🍇','🍐','🍎','🍌','🥝'];
 const monthFlowers = ['🌺','🌸','🌷','🌹','💐','🪷','🌻','🌼','🏵️','🍁','🥀','❄️'];
@@ -201,7 +203,9 @@ function addCategoryFromInput() {
 function fillInput(val) { document.getElementById('item-input').value = val; }
 function deleteCustomTag(e, index) { e.stopPropagation(); if(confirm(`删除标签?`)) { customTags.splice(index, 1); saveData(); renderTags(); } }
 
-// 备忘录
+// ==========================================
+// 4. 备忘录 & 动态
+// ==========================================
 function addTodo() {
   const input = document.getElementById('todo-input'); const text = input.value.trim();
   if(!text) return; todos.unshift({ text: text, completed: false }); saveData(); renderTodos(); input.value = '';
@@ -217,6 +221,7 @@ function renderTodos() {
     container.appendChild(el);
   });
 }
+
 function triggerFileInput() { document.getElementById('file-input').click(); }
 function handleFileSelect(input) {
   if (input.files && input.files[0]) {
@@ -267,6 +272,7 @@ function renderMemos() {
   });
 }
 function deleteMemo(index) { if(confirm("删除动态？")) { memos.splice(index, 1); saveData(); renderMemos(); } }
+
 function openDayDetail(image, text, dateStr) {
   document.getElementById('detail-img').src = image;
   document.getElementById('detail-text').innerText = text || "（仅照片）";
@@ -305,31 +311,135 @@ function switchMemoView(view, btn) {
   else { listView.style.display = 'none'; calendarView.style.display = 'block'; renderMemoCalendar(); }
 }
 
-// 密码
-function openPasswordModal() { document.getElementById('password-modal').style.setProperty('display', 'flex', 'important'); renderPasswordList(); }
-function closePasswordModal() { document.getElementById('password-modal').style.setProperty('display', 'none', 'important'); }
-function addPassword() {
-  const title = document.getElementById('pass-title').value.trim(); const account = document.getElementById('pass-account').value.trim();
-  const secret = document.getElementById('pass-secret').value.trim(); const url = document.getElementById('pass-url').value.trim();
-  if(!title || !account || !secret) { alert("请填写完整"); return; }
-  passwords.push({ id: Date.now(), title, account, secret, url }); saveData();
-  document.getElementById('pass-title').value = ''; document.getElementById('pass-account').value = ''; document.getElementById('pass-secret').value = ''; document.getElementById('pass-url').value = '';
+// ==========================================
+// 5. 密码箱逻辑 (更新：支持编辑、复制)
+// ==========================================
+function openPasswordModal() { 
+  document.getElementById('password-modal').style.setProperty('display', 'flex', 'important'); 
+  resetPassInput(); // 每次打开都重置
+  renderPasswordList(); 
+}
+function closePasswordModal() { 
+  document.getElementById('password-modal').style.setProperty('display', 'none', 'important'); 
+  resetPassInput(); 
+}
+
+// 保存逻辑（新增 或 修改）
+function savePasswordItem() {
+  const title = document.getElementById('pass-title').value.trim();
+  const account = document.getElementById('pass-account').value.trim();
+  const secret = document.getElementById('pass-secret').value.trim();
+  const url = document.getElementById('pass-url').value.trim();
+
+  if(!title || !account || !secret) { alert("请填写完整信息"); return; }
+
+  if (editingPassId) {
+    // 处于编辑模式，更新旧数据
+    const index = passwords.findIndex(p => p.id === editingPassId);
+    if (index !== -1) {
+      passwords[index] = { id: editingPassId, title, account, secret, url };
+      alert("✅ 修改保存成功！");
+    }
+  } else {
+    // 处于新增模式
+    passwords.push({ id: Date.now(), title, account, secret, url });
+  }
+
+  saveData();
+  resetPassInput(); // 清空并恢复为新增状态
   renderPasswordList();
 }
+
+// 进入编辑模式
+function editPassword(id) {
+  const item = passwords.find(p => p.id === id);
+  if (!item) return;
+
+  // 填回输入框
+  document.getElementById('pass-title').value = item.title;
+  document.getElementById('pass-account').value = item.account;
+  document.getElementById('pass-secret').value = item.secret;
+  document.getElementById('pass-url').value = item.url || '';
+
+  // 改变界面状态
+  editingPassId = id;
+  const btn = document.getElementById('pass-save-btn');
+  btn.innerText = "✅ 确认修改";
+  btn.style.background = "linear-gradient(135deg, #34c759, #30b34d)"; // 变绿
+  document.getElementById('pass-cancel-btn').style.display = "block"; // 显示取消按钮
+}
+
+// 重置输入框
+function resetPassInput() {
+  document.getElementById('pass-title').value = '';
+  document.getElementById('pass-account').value = '';
+  document.getElementById('pass-secret').value = '';
+  document.getElementById('pass-url').value = '';
+  
+  editingPassId = null;
+  const btn = document.getElementById('pass-save-btn');
+  btn.innerText = "添加保存";
+  btn.style.background = ""; // 恢复默认
+  document.getElementById('pass-cancel-btn').style.display = "none";
+}
+
+// 生成随机密码
+function generateRandomPass() {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+  let pass = "";
+  for (let i=0; i<12; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  document.getElementById('pass-secret').value = pass;
+}
+
+// 渲染列表 (新按钮)
 function renderPasswordList() {
-  const container = document.getElementById('password-list-container'); container.innerHTML = '';
-  passwords.forEach((p, index) => {
-    const el = document.createElement('div'); el.className = 'password-item';
-    el.innerHTML = `<div class="pass-info"><span class="pass-title">${p.title}</span><span class="pass-detail">👤 ${p.account}</span><span class="pass-detail">🔑 <span id="secret-${index}" class="masked-text">******</span></span>${p.url ? `<span class="pass-detail">🔗 ${p.url}</span>` : ''}</div><div class="pass-actions"><i class="fas fa-eye action-icon" onclick="togglePassVisibility(${index}, '${p.secret}')"></i><i class="fas fa-copy action-icon" onclick="copyPass('${p.secret}')"></i><i class="fas fa-trash-alt action-icon" style="color:#ff3b30" onclick="deletePassword(${index})"></i></div>`;
-    container.prepend(el);
+  const container = document.getElementById('password-list-container');
+  container.innerHTML = '';
+  
+  const displayList = [...passwords].reverse(); // 倒序显示
+
+  displayList.forEach((p) => {
+    const el = document.createElement('div');
+    el.className = 'password-item';
+    el.innerHTML = `
+      <div class="pass-info">
+        <span class="pass-title">${p.title}</span>
+        <span class="pass-detail">👤 ${p.account}</span>
+        <span class="pass-detail">🔑 <span class="masked-text">******</span></span>
+        ${p.url ? `<span class="pass-detail">🔗 ${p.url}</span>` : ''}
+      </div>
+      <div class="pass-actions">
+        <i class="fas fa-pen action-icon" onclick="editPassword(${p.id})" title="编辑修改"></i>
+        <i class="far fa-user action-icon" onclick="copyText('${p.account}', '账号')" title="复制账号"></i>
+        <i class="fas fa-key action-icon" onclick="copyText('${p.secret}', '密码')" title="复制密码"></i>
+        <i class="fas fa-trash-alt action-icon" style="color:#ff3b30" onclick="deletePassword(${p.id})" title="删除"></i>
+      </div>
+    `;
+    container.appendChild(el);
   });
 }
-function togglePassVisibility(index, secret) {
-  const el = document.getElementById(`secret-${index}`);
-  if (el.innerText === '******') { el.innerText = secret; el.classList.remove('masked-text'); } else { el.innerText = '******'; el.classList.add('masked-text'); }
+
+// 复制功能
+function copyText(text, type) {
+  if (!text) return;
+  const input = document.createElement('textarea');
+  input.value = text;
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand('copy');
+  document.body.removeChild(input);
+  alert(`✅ ${type}已复制！`);
 }
-function copyPass(text) { const input = document.createElement('textarea'); input.value = text; document.body.appendChild(input); input.select(); document.execCommand('copy'); document.body.removeChild(input); alert("已复制"); }
-function deletePassword(index) { if(confirm("删除密码？")) { passwords.splice(index, 1); saveData(); renderPasswordList(); } }
+
+function deletePassword(id) {
+  if(confirm("确定删除这条记录吗？")) {
+    passwords = passwords.filter(p => p.id !== id);
+    if (editingPassId === id) resetPassInput(); // 如果正在编辑它，重置
+    saveData();
+    renderPasswordList();
+  }
+}
+
 function exportPasswordsToText() {
   if (passwords.length === 0) { alert("空空如也"); return; }
   let content = `=== 我的密码本 ===\n导出时间: ${new Date().toLocaleString()}\n\n`;
@@ -338,7 +448,9 @@ function exportPasswordsToText() {
   const a = document.createElement('a'); a.href = url; a.download = `我的密码本.txt`; a.click(); URL.revokeObjectURL(url);
 }
 
-// 基础管理
+// ==========================================
+// 6. 数据管理 (V8.0 强制版)
+// ==========================================
 function loadData() {
   try {
     const savedTags = localStorage.getItem('myAppCustomTags'); if (savedTags) customTags = JSON.parse(savedTags);
@@ -364,40 +476,10 @@ function saveData() {
   }
 }
 
-// 辅助设置
-function openSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'flex', 'important'); }
-function closeSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'none', 'important'); }
-function toggleMergeHelp() { const box = document.getElementById('merge-help-box'); if(box.style.display === 'none') box.style.display = 'block'; else box.style.display = 'none'; }
-function exportAllData() { const data = { transactions, memos, todos, passwords, customTags, currentTheme }; downloadJson(data, `备份_${new Date().toISOString().slice(0,10)}.json`); }
-function exportDataRange() {
-  const startStr = document.getElementById('export-start-date').value; const endStr = document.getElementById('export-end-date').value;
-  if (!startStr || !endStr) { alert("请选择范围"); return; }
-  const startTime = new Date(startStr + " 00:00:00").getTime(); const endTime = new Date(endStr + " 23:59:59").getTime();
-  const fTrans = transactions.filter(t => { const d = new Date(t.year, t.month-1, t.day).getTime(); return d >= startTime && d <= endTime; });
-  const fMemos = memos.filter(m => { const d = m.timestamp || 0; return d >= startTime && d <= endTime; });
-  downloadJson({ transactions: fTrans, memos: fMemos, todos, passwords }, `范围备份_${startStr}_${endStr}.json`);
-}
-function downloadJson(data, filename) { const str = JSON.stringify(data); const blob = new Blob([str], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
-function importDataSmart(input) {
-  const file = input.files[0]; if(!file) return;
-  const reader = new FileReader(); reader.onload = function(e) {
-    try { const d = JSON.parse(e.target.result); if(confirm("确认导入?")) {
-      if(d.transactions) { const ids = new Set(transactions.map(t=>t.id)); d.transactions.forEach(t=>{ if(!ids.has(t.id)) transactions.push(t); }); }
-      if(d.memos) memos = [...memos, ...d.memos]; if(d.todos) todos = d.todos; if(d.passwords) passwords = [...passwords, ...d.passwords];
-      if(d.customTags) customTags = Array.from(new Set([...customTags, ...d.customTags]));
-      saveData(); location.reload();
-    }} catch(err) { alert("文件错误"); }
-  }; reader.readAsText(file);
-}
-
-// ==========================================
-// 5. 核心修复：强制执行版删除逻辑 (不刷新页面)
-// ==========================================
-
-// 手动解析日期，防止时区偏差
+// 辅助函数：手动拆解日期
 function getLocaLStart(dateStr) {
   if(!dateStr) return 0;
-  const parts = dateStr.split(/[-/]/); // 兼容 - 或 /
+  const parts = dateStr.split(/[-/]/); 
   return new Date(parts[0], parts[1]-1, parts[2], 0, 0, 0, 0).getTime();
 }
 function getLocalEnd(dateStr) {
@@ -424,52 +506,35 @@ function deleteByDateRange() {
   let countT = 0;
   let countM = 0;
 
-  // --- 删除账单 ---
   if (delT) {
     const initialLen = transactions.length;
     transactions = transactions.filter(t => {
-      // 强制把时间戳转为数字
       let itemTime = Number(t.timestamp);
-      if (!itemTime) {
-        itemTime = new Date(t.year, t.month - 1, t.day).getTime();
-      }
-      // 如果不在范围内(false)，则保留(true)
-      const isInRange = itemTime >= st && itemTime <= et;
-      return !isInRange; 
+      if (!itemTime) itemTime = new Date(t.year, t.month - 1, t.day).getTime();
+      return !(itemTime >= st && itemTime <= et); 
     });
     countT = initialLen - transactions.length;
   }
 
-  // --- 删除动态 ---
   if (delM) {
     const initialLen = memos.length;
     memos = memos.filter(m => {
       let itemTime = Number(m.timestamp);
-      if (!itemTime && m.time) {
-         const datePart = m.time.split(' ')[0].replace('月', '/').replace('日', '');
-         itemTime = new Date(`${currentYear}/${datePart} 00:00:00`).getTime();
-      }
-      if (!itemTime) return true; // 无法识别日期的不删
-
-      const isInRange = itemTime >= st && itemTime <= et;
-      return !isInRange;
+      if (!itemTime && m.time) { const datePart = m.time.split(' ')[0].replace('月', '/').replace('日', ''); itemTime = new Date(`${currentYear}/${datePart} 00:00:00`).getTime(); }
+      if (!itemTime) return true; 
+      return !(itemTime >= st && itemTime <= et);
     });
     countM = initialLen - memos.length;
   }
   
-  // 1. 先保存
   saveData();
-  
-  // 2. 【核心】直接更新界面，不再 reload，防止缓存回档
   renderAllTransactions();
   renderMemos();
   
-  // 3. 提示结果
   if (countT === 0 && countM === 0) {
     alert("⚠️ 未找到该范围内的数据。");
   } else {
     alert(`✅ 已立即删除：\n- 账单：${countT} 笔\n- 动态：${countM} 条`);
-    // 关闭弹窗
     closeSettingsModal();
   }
 }
@@ -556,7 +621,7 @@ function openDateSelectModal(mode) { datePickerMode = mode; document.getElementB
 function closeDateSelectModal() { document.getElementById('date-select-modal').style.setProperty('display', 'none', 'important'); }
 function closeMindMap() { document.getElementById('mindmap-modal').style.setProperty('display', 'none', 'important'); }
 function generateMindMapWithDate(s,e) {
-  let fMemos=memos; if(s&&e) { const st=getLocaLStart(s); const et=getLocalEnd(e); fMemos=memos.filter(m=>{ let t=m.timestamp; if(!t){const y=new Date().getFullYear(); const d=m.time.split(' ')[0].replace('月','/').replace('日',''); t=new Date(`${y}/${d} 00:00:00`).getTime();} return t>=st && t<=et; }); }
+  let fMemos=memos; if(s&&e) { const st=new Date(s+" 00:00:00").getTime(); const et=new Date(e+" 23:59:59").getTime(); fMemos=memos.filter(m=>{ let t=m.timestamp; if(!t){const y=new Date().getFullYear(); const d=m.time.split(' ')[0].replace('月','/').replace('日',''); t=new Date(`${y}/${d} 00:00:00`).getTime();} return t>=st && t<=et; }); }
   renderMindMapWithData(fMemos);
 }
 function renderMindMapWithData(list) {
