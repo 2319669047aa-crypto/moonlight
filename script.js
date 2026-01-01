@@ -7,10 +7,18 @@ let todos = [];
 let passwords = []; 
 const fixedTags = ['早餐', '午餐', '晚餐', '奶茶', '生活用品'];
 let customTags = [];
+// 🟢 新增：字体历史记录
+let savedFonts = [];
 let myChart = null;
 let mindMapChart = null;
 let isAllCollapsed = false;
-let currentTheme = { color: '#007aff', gradient: true, titles: { accounting: "💰 本月支出", memo: "📝 个人动态" } };
+let currentTheme = { 
+  color: '#007aff', 
+  gradient: true, 
+  titles: { accounting: "💰 本月支出", memo: "📝 个人动态" }, 
+  fontUrl: '', // 当前使用的URL
+  fontName: '' // 当前使用的名字
+};
 let currentImageBase64 = null; 
 let mindMapMode = 'fruit';
 let datePickerMode = 'tree'; 
@@ -38,8 +46,6 @@ window.onload = function() {
   renderTags();
   const pill = document.querySelector('.toggle-pill');
   if(pill) switchMemoView('list', pill); 
-  
-  // 绑定日期确认按钮
   document.getElementById('date-confirm-btn').onclick = handleDateConfirm;
 };
 
@@ -93,7 +99,6 @@ function addBill() {
   moneyInput.value = ''; itemInput.value = '';
 }
 
-// 渲染函数：恢复为无图标的简洁列表
 function renderAllTransactions() {
   const container = document.getElementById('bill-container');
   if(!container) return;
@@ -354,6 +359,10 @@ function loadData() {
     const savedTodos = localStorage.getItem('myAppTodos'); if (savedTodos) todos = JSON.parse(savedTodos);
     const savedMemos = localStorage.getItem('myAppMemos'); if (savedMemos) memos = JSON.parse(savedMemos);
     const savedPasswords = localStorage.getItem('myAppPasswords'); if (savedPasswords) passwords = JSON.parse(savedPasswords);
+    
+    // 🟢 加载保存的字体
+    const savedF = localStorage.getItem('myAppSavedFonts'); 
+    if (savedF) savedFonts = JSON.parse(savedF);
   } catch (e) { console.error("数据修复中..."); }
   renderAllTransactions(); renderTodos(); renderMemos();
 }
@@ -365,13 +374,19 @@ function saveData() {
     localStorage.setItem('myAppPasswords', JSON.stringify(passwords));
     localStorage.setItem('myAppCustomTags', JSON.stringify(customTags));
     localStorage.setItem('myAppTheme', JSON.stringify(currentTheme));
+    
+    // 🟢 保存字体列表
+    localStorage.setItem('myAppSavedFonts', JSON.stringify(savedFonts));
   } catch(e) { alert("❌ 数据保存失败！\n原因可能是手机存储空间已满或在无痕模式下。"); }
 }
 
-function openSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'flex', 'important'); }
+function openSettingsModal() { 
+  document.getElementById('settings-modal').style.setProperty('display', 'flex', 'important'); 
+  renderFontOptions(); 
+}
 function closeSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'none', 'important'); }
 function toggleMergeHelp() { const box = document.getElementById('merge-help-box'); if(box.style.display === 'none') box.style.display = 'block'; else box.style.display = 'none'; }
-function exportAllData() { const data = { transactions, memos, todos, passwords, customTags, currentTheme }; downloadJson(data, `备份_${new Date().toISOString().slice(0,10)}.json`); }
+function exportAllData() { const data = { transactions, memos, todos, passwords, customTags, currentTheme, savedFonts }; downloadJson(data, `备份_${new Date().toISOString().slice(0,10)}.json`); }
 function exportDataRange() {
   const startStr = document.getElementById('export-start-date').value; const endStr = document.getElementById('export-end-date').value;
   if (!startStr || !endStr) { alert("请选择范围"); return; }
@@ -388,6 +403,8 @@ function importDataSmart(input) {
       if(d.transactions) { const ids = new Set(transactions.map(t=>t.id)); d.transactions.forEach(t=>{ if(!ids.has(t.id)) transactions.push(t); }); }
       if(d.memos) memos = [...memos, ...d.memos]; if(d.todos) todos = d.todos; if(d.passwords) passwords = [...passwords, ...d.passwords];
       if(d.customTags) customTags = Array.from(new Set([...customTags, ...d.customTags]));
+      // 导入字体历史
+      if(d.savedFonts) savedFonts = d.savedFonts;
       saveData(); location.reload();
     }} catch(err) { alert("文件错误"); }
   }; reader.readAsText(file);
@@ -445,12 +462,102 @@ function lightenColor(col,amt) { var usePound=false; if(col[0]=="#"){col=col.sli
 function hexToRgba(hex,alpha) { if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){ let c=hex.substring(1).split(''); if(c.length==3)c=[c[0],c[0],c[1],c[1],c[2],c[2]]; c='0x'+c.join(''); return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')'; } return 'rgba(0,0,0,0.2)'; }
 function updateThemePreview() { const c=document.getElementById('main-theme-color').value; const g=document.getElementById('gradient-toggle').checked; document.getElementById('theme-preview').style.background = g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c; document.getElementById('theme-color-text').value = c; }
 function syncColorFromText() { const textVal = document.getElementById('theme-color-text').value; if (/^#[0-9A-F]{6}$/i.test(textVal)) { document.getElementById('main-theme-color').value = textVal; updateThemePreview(); } }
+
+// 🟢 核心功能：字体管理器
+function addNewFont() {
+  const url = document.getElementById('new-font-url').value.trim();
+  const name = document.getElementById('new-font-name').value.trim();
+  
+  if(!name) { alert("请输入字体名称"); return; }
+  
+  // 添加到保存列表
+  savedFonts.push({ name: name, url: url });
+  
+  // 保存并应用
+  currentTheme.fontName = name;
+  currentTheme.fontUrl = url;
+  
+  saveData();
+  applyCustomFont(url, name);
+  renderFontOptions(); // 刷新下拉框
+  document.getElementById('saved-font-select').value = savedFonts.length - 1; // 选中刚才添加的
+  
+  // 清空输入框
+  document.getElementById('new-font-url').value = '';
+  document.getElementById('new-font-name').value = '';
+  alert("字体添加并应用成功！");
+}
+
+function switchSavedFont() {
+  const val = document.getElementById('saved-font-select').value;
+  if(val === 'system') {
+    currentTheme.fontName = '';
+    currentTheme.fontUrl = '';
+    applyCustomFont('', '');
+  } else {
+    const font = savedFonts[val];
+    if(font) {
+      currentTheme.fontName = font.name;
+      currentTheme.fontUrl = font.url;
+      applyCustomFont(font.url, font.name);
+    }
+  }
+  saveData();
+}
+
+function deleteCurrentFont() {
+  const val = document.getElementById('saved-font-select').value;
+  if(val === 'system') { alert("系统字体不能删除"); return; }
+  
+  if(confirm("确定删除这个字体配置吗？")) {
+    savedFonts.splice(val, 1);
+    // 恢复默认
+    currentTheme.fontName = '';
+    currentTheme.fontUrl = '';
+    applyCustomFont('', '');
+    saveData();
+    renderFontOptions();
+  }
+}
+
+function renderFontOptions() {
+  const select = document.getElementById('saved-font-select');
+  if(!select) return;
+  
+  // 保留第一项（系统默认）
+  select.innerHTML = '<option value="system">📱 系统默认字体</option>';
+  
+  savedFonts.forEach((f, index) => {
+    const opt = document.createElement('option');
+    opt.value = index;
+    opt.innerText = `🅰️ ${f.name}`;
+    select.appendChild(opt);
+  });
+  
+  // 尝试回显当前选中的字体
+  if (!currentTheme.fontName) {
+    select.value = 'system';
+  } else {
+    // 查找对应索引
+    const idx = savedFonts.findIndex(f => f.name === currentTheme.fontName);
+    if(idx !== -1) select.value = idx;
+  }
+}
+
+function applyCustomFont(url, name) {
+  const linkTag = document.getElementById('dynamic-font-link');
+  if (url) linkTag.href = url; else linkTag.href = "";
+  if (name) document.body.style.fontFamily = `"${name}", -apple-system, BlinkMacSystemFont, sans-serif`;
+  else document.body.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+}
+
 function applyTheme() {
   const c=document.getElementById('main-theme-color').value; const g=document.getElementById('gradient-toggle').checked;
   const r=document.documentElement; r.style.setProperty('--main-color', c);
   r.style.setProperty('--theme-gradient', g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c);
   r.style.setProperty('--theme-shadow', `0 4px 12px ${hexToRgba(c,0.4)}`);
-  currentTheme.color=c; currentTheme.gradient=g; saveData(); closeThemeModal();
+  currentTheme.color=c; currentTheme.gradient=g;
+  saveData(); closeThemeModal();
 }
 function resetTheme() { document.getElementById('main-theme-color').value='#007aff'; document.getElementById('gradient-toggle').checked=true; applyTheme(); }
 function loadTheme() {
@@ -460,6 +567,9 @@ function loadTheme() {
     document.getElementById('main-theme-color').value = currentTheme.color;
     document.getElementById('gradient-toggle').checked = currentTheme.gradient;
     applyTheme();
+    // 🟢 加载时应用字体
+    applyCustomFont(currentTheme.fontUrl, currentTheme.fontName);
+    
     if(currentTheme.titles) {
       document.getElementById('title-accounting').innerHTML = `${currentTheme.titles.accounting} <i class="fas fa-pen" style="font-size:10px; color:#ddd; margin-left:5px;"></i>`;
       document.getElementById('title-memo').innerHTML = `${currentTheme.titles.memo} <i class="fas fa-pen" style="font-size:10px; color:#ddd; margin-left:5px;"></i>`;
