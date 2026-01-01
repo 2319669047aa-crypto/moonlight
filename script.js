@@ -458,6 +458,7 @@ function saveData() {
   }
 }
 
+// 辅助函数：手动拆解日期
 function getLocaLStart(dateStr) {
   if(!dateStr) return 0;
   const parts = dateStr.split(/[-/]/); 
@@ -619,3 +620,25 @@ function renderMindMapWithData(list) {
   if(mindMapChart) mindMapChart.dispose(); mindMapChart=echarts.init(document.getElementById('echarts-container')); mindMapChart.setOption(opt); window.onresize=function(){mindMapChart.resize();};
 }
 function switchMindMapMode(m) { mindMapMode=m; document.getElementById('btn-fruit').classList.toggle('active',m==='fruit'); document.getElementById('btn-flower').classList.toggle('active',m==='flower'); const s=document.getElementById('mindmap-start-date').value; const e=document.getElementById('mindmap-end-date').value; generateMindMapWithDate(s,e); }
+
+// ==========================================
+// 7. 新增：主题颜色同步逻辑 (V9.0 精准控色版)
+// ==========================================
+function updateThemePreview() { 
+  const c = document.getElementById('main-theme-color').value; 
+  const g = document.getElementById('gradient-toggle').checked; 
+  // 同步文字框
+  document.getElementById('theme-color-text').value = c;
+  
+  document.getElementById('theme-preview').style.background = g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c; 
+}
+
+// 当用户修改文本框时，同步回取色器
+function syncColorFromText() {
+  const textVal = document.getElementById('theme-color-text').value;
+  // 简单校验是否为Hex格式
+  if (/^#[0-9A-F]{6}$/i.test(textVal)) {
+    document.getElementById('main-theme-color').value = textVal;
+    updateThemePreview();
+  }
+}
