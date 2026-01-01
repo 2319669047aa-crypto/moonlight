@@ -16,7 +16,6 @@ let mindMapMode = 'fruit';
 let datePickerMode = 'tree'; 
 let currentMemoFilter = null; 
 let editingPassId = null;
-// 新增：正在修改日期的账单ID
 let currentEditingBillId = null;
 
 const monthFruits = ['🍊','🍓','🍍','🍒','🍈','🍑','🍉','🍇','🍐','🍎','🍌','🥝'];
@@ -49,136 +48,84 @@ window.onclick = function(event) {
 }
 
 // ==========================================
-// 2. 标题编辑逻辑 (带确认按钮)
+// 2. 标题编辑逻辑
 // ==========================================
 function editPageTitle(elementId) {
   const el = document.getElementById(elementId);
   const currentText = el.innerText.replace(' ✎', ''); 
-  
-  const wrapper = document.createElement('div');
-  wrapper.className = 'title-edit-wrapper';
-  
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = currentText;
-  
-  const confirmBtn = document.createElement('div');
-  confirmBtn.className = 'title-save-btn';
-  confirmBtn.innerHTML = '<i class="fas fa-check"></i>';
-  
+  const wrapper = document.createElement('div'); wrapper.className = 'title-edit-wrapper';
+  const input = document.createElement('input'); input.type = 'text'; input.value = currentText;
+  const confirmBtn = document.createElement('div'); confirmBtn.className = 'title-save-btn'; confirmBtn.innerHTML = '<i class="fas fa-check"></i>';
   const saveAction = () => saveNewTitle(elementId, input.value);
-  
   confirmBtn.onclick = (e) => { e.stopPropagation(); saveAction(); };
   input.onkeydown = function(e) { if(e.key === 'Enter') saveAction(); };
-  
-  wrapper.appendChild(input);
-  wrapper.appendChild(confirmBtn);
-  el.parentNode.replaceChild(wrapper, el);
-  input.focus();
+  wrapper.appendChild(input); wrapper.appendChild(confirmBtn);
+  el.parentNode.replaceChild(wrapper, el); input.focus();
 }
-
 function saveNewTitle(elementId, newValue) {
   if (!newValue.trim()) newValue = "我的标题"; 
   if (elementId === 'title-accounting') currentTheme.titles.accounting = newValue;
   if (elementId === 'title-memo') currentTheme.titles.memo = newValue;
-  saveData();
-  location.reload(); 
+  saveData(); location.reload(); 
 }
 
 // ==========================================
-// 3. 记账核心逻辑 (更新：增加修改日期图标)
+// 3. 记账核心逻辑
 // ==========================================
 function addBill() {
   const moneyInput = document.getElementById('money-input');
   const itemInput = document.getElementById('item-input');
   const money = parseFloat(moneyInput.value);
   const item = itemInput.value.trim();
-
   if (!item || isNaN(money) || money === 0) { alert('金额和用途都要填哦'); return; }
   if (!fixedTags.includes(item) && !customTags.includes(item)) { customTags.push(item); renderTags(); }
-
-  const id = Date.now(); 
-  const now = new Date();
+  const id = Date.now(); const now = new Date();
   const newBill = {
     id: id, item: item, money: money,
     dateString: `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`,
     year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(),
     timestamp: now.getTime()
   };
-  
-  transactions.unshift(newBill); 
-  saveData(); 
-  renderAllTransactions();
+  transactions.unshift(newBill); saveData(); renderAllTransactions();
   moneyInput.value = ''; itemInput.value = '';
 }
-
 function renderAllTransactions() {
   const container = document.getElementById('bill-container');
   if(!container) return;
   container.innerHTML = ''; 
-
-  if (transactions.length === 0) {
-    container.innerHTML = '<div style="text-align:center; color:#ccc; padding:20px;">还没有记账哦</div>';
-    return;
-  }
-
+  if (transactions.length === 0) { container.innerHTML = '<div style="text-align:center; color:#ccc; padding:20px;">还没有记账哦</div>'; return; }
   const groups = {};
   transactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
   transactions.forEach(t => {
     if(!t.dateString) t.dateString = `${t.year}年${t.month}月${t.day}日`;
     if (!groups[t.dateString]) groups[t.dateString] = [];
     groups[t.dateString].push(t);
   });
-
   Object.keys(groups).forEach(dateStr => {
     const dayTotal = groups[dateStr].reduce((sum, t) => sum + t.money, 0);
     const groupDiv = document.createElement('div');
     groupDiv.className = 'date-group'; groupDiv.style.padding = "0"; 
-    
-    groupDiv.innerHTML = `
-      <div class="date-header" onclick="toggleThisGroup(this)">
-        <span>${dateStr} <span style="font-size:12px;color:#999;margin-left:5px">¥${dayTotal}</span></span>
-        <i class="fas fa-chevron-down arrow-icon"></i>
-      </div>
-      <div class="date-content"></div>`;
-    
+    groupDiv.innerHTML = `<div class="date-header" onclick="toggleThisGroup(this)"><span>${dateStr} <span style="font-size:12px;color:#999;margin-left:5px">¥${dayTotal}</span></span><i class="fas fa-chevron-down arrow-icon"></i></div><div class="date-content"></div>`;
     const contentDiv = groupDiv.querySelector('.date-content');
     groups[dateStr].forEach(t => {
-      const billDiv = document.createElement('div');
-      billDiv.className = 'bill-item';
-      billDiv.innerHTML = `
-        <span class="bill-name">${t.item}</span>
-        <div class="bill-right">
-          <span class="bill-money">-${t.money}</span>
-          <i class="fas fa-edit bill-edit-btn" onclick="openEditBillModal(${t.id})" title="修改日期"></i>
-          <i class="fas fa-trash-alt delete-btn" onclick="deleteBill(${t.id})"></i>
-        </div>`;
+      const billDiv = document.createElement('div'); billDiv.className = 'bill-item';
+      billDiv.innerHTML = `<span class="bill-name">${t.item}</span><div class="bill-right"><span class="bill-money">-${t.money}</span><i class="fas fa-edit bill-edit-btn" onclick="openEditBillModal(${t.id})" title="修改日期"></i><i class="fas fa-trash-alt delete-btn" onclick="deleteBill(${t.id})"></i></div>`;
       contentDiv.appendChild(billDiv);
     });
     container.appendChild(groupDiv);
   });
 }
-
 function toggleThisGroup(header) {
   const content = header.nextElementSibling;
   const arrow = header.querySelector('.arrow-icon');
-  if (content.classList.contains('hidden')) {
-    content.classList.remove('hidden');
-    arrow.style.transform = 'rotate(0deg)';
-  } else {
-    content.classList.add('hidden');
-    arrow.style.transform = 'rotate(-90deg)';
-  }
+  if (content.classList.contains('hidden')) { content.classList.remove('hidden'); arrow.style.transform = 'rotate(0deg)'; } 
+  else { content.classList.add('hidden'); arrow.style.transform = 'rotate(-90deg)'; }
 }
-
 function deleteBill(id) {
   if(!confirm("删除这条账单？")) return;
   transactions = transactions.filter(t => t.id !== id); 
   saveData(); renderAllTransactions(); 
 }
-
-// 标签
 function renderTags() {
   const container = document.getElementById('tags-wrapper');
   if(!container) return;
@@ -205,54 +152,26 @@ function addCategoryFromInput() {
 function fillInput(val) { document.getElementById('item-input').value = val; }
 function deleteCustomTag(e, index) { e.stopPropagation(); if(confirm(`删除标签?`)) { customTags.splice(index, 1); saveData(); renderTags(); } }
 
-// === 新增：账单日期修改逻辑 ===
 function openEditBillModal(id) {
   currentEditingBillId = id;
   document.getElementById('edit-bill-modal').style.setProperty('display', 'flex', 'important');
-  // 尝试设置当前日期
   const item = transactions.find(t => t.id === id);
   if(item) {
-    // 简单格式化 YYYY-MM-DD 适配 input type=date
-    const y = item.year;
-    const m = item.month < 10 ? '0'+item.month : item.month;
-    const d = item.day < 10 ? '0'+item.day : item.day;
+    const y = item.year; const m = item.month < 10 ? '0'+item.month : item.month; const d = item.day < 10 ? '0'+item.day : item.day;
     document.getElementById('new-bill-date').value = `${y}-${m}-${d}`;
   }
 }
-
-function closeEditBillModal() {
-  document.getElementById('edit-bill-modal').style.setProperty('display', 'none', 'important');
-  currentEditingBillId = null;
-}
-
+function closeEditBillModal() { document.getElementById('edit-bill-modal').style.setProperty('display', 'none', 'important'); currentEditingBillId = null; }
 function saveBillDateChange() {
   const dateStr = document.getElementById('new-bill-date').value;
-  if (!dateStr || !currentEditingBillId) {
-    alert("请选择日期");
-    return;
-  }
-  
+  if (!dateStr || !currentEditingBillId) { alert("请选择日期"); return; }
   const index = transactions.findIndex(t => t.id === currentEditingBillId);
   if (index === -1) return;
-
-  // 解析新日期 (避免时区问题，手动拆解)
-  const parts = dateStr.split('-'); // 2026-01-05
-  const newYear = parseInt(parts[0]);
-  const newMonth = parseInt(parts[1]);
-  const newDay = parseInt(parts[2]);
-
-  // 更新该条账单数据
-  transactions[index].year = newYear;
-  transactions[index].month = newMonth;
-  transactions[index].day = newDay;
+  const parts = dateStr.split('-'); const newYear = parseInt(parts[0]); const newMonth = parseInt(parts[1]); const newDay = parseInt(parts[2]);
+  transactions[index].year = newYear; transactions[index].month = newMonth; transactions[index].day = newDay;
   transactions[index].dateString = `${newYear}年${newMonth}月${newDay}日`;
-  // 更新时间戳，保持小时分钟为0或当前时间，为了排序简单，设为该日中午
   transactions[index].timestamp = new Date(newYear, newMonth - 1, newDay, 12, 0, 0).getTime();
-
-  saveData();
-  renderAllTransactions();
-  closeEditBillModal();
-  alert("日期修改成功！");
+  saveData(); renderAllTransactions(); closeEditBillModal(); alert("日期修改成功！");
 }
 
 // ==========================================
@@ -273,7 +192,6 @@ function renderTodos() {
     container.appendChild(el);
   });
 }
-
 function triggerFileInput() { document.getElementById('file-input').click(); }
 function handleFileSelect(input) {
   if (input.files && input.files[0]) {
@@ -324,7 +242,6 @@ function renderMemos() {
   });
 }
 function deleteMemo(index) { if(confirm("删除动态？")) { memos.splice(index, 1); saveData(); renderMemos(); } }
-
 function openDayDetail(image, text, dateStr) {
   document.getElementById('detail-img').src = image;
   document.getElementById('detail-text').innerText = text || "（仅照片）";
@@ -364,127 +281,58 @@ function switchMemoView(view, btn) {
 }
 
 // ==========================================
-// 5. 密码箱逻辑 (支持编辑/复制，无随机按钮)
+// 5. 密码箱逻辑
 // ==========================================
-function openPasswordModal() { 
-  document.getElementById('password-modal').style.setProperty('display', 'flex', 'important'); 
-  resetPassInput(); 
-  renderPasswordList(); 
-}
-function closePasswordModal() { 
-  document.getElementById('password-modal').style.setProperty('display', 'none', 'important'); 
-  resetPassInput(); 
-}
-
+function openPasswordModal() { document.getElementById('password-modal').style.setProperty('display', 'flex', 'important'); resetPassInput(); renderPasswordList(); }
+function closePasswordModal() { document.getElementById('password-modal').style.setProperty('display', 'none', 'important'); resetPassInput(); }
 function savePasswordItem() {
   const title = document.getElementById('pass-title').value.trim();
   const account = document.getElementById('pass-account').value.trim();
   const secret = document.getElementById('pass-secret').value.trim();
   const url = document.getElementById('pass-url').value.trim();
-
   if(!title || !account || !secret) { alert("请填写完整信息"); return; }
-
   if (editingPassId) {
     const index = passwords.findIndex(p => p.id === editingPassId);
-    if (index !== -1) {
-      passwords[index] = { id: editingPassId, title, account, secret, url };
-      alert("✅ 修改保存成功！");
-    }
-  } else {
-    passwords.push({ id: Date.now(), title, account, secret, url });
-  }
-
-  saveData();
-  resetPassInput(); 
-  renderPasswordList();
+    if (index !== -1) { passwords[index] = { id: editingPassId, title, account, secret, url }; alert("✅ 修改保存成功！"); }
+  } else { passwords.push({ id: Date.now(), title, account, secret, url }); }
+  saveData(); resetPassInput(); renderPasswordList();
 }
-
 function editPassword(id) {
-  const item = passwords.find(p => p.id === id);
-  if (!item) return;
-
-  document.getElementById('pass-title').value = item.title;
-  document.getElementById('pass-account').value = item.account;
-  document.getElementById('pass-secret').value = item.secret;
-  document.getElementById('pass-url').value = item.url || '';
-
+  const item = passwords.find(p => p.id === id); if (!item) return;
+  document.getElementById('pass-title').value = item.title; document.getElementById('pass-account').value = item.account;
+  document.getElementById('pass-secret').value = item.secret; document.getElementById('pass-url').value = item.url || '';
   editingPassId = id;
-  const btn = document.getElementById('pass-save-btn');
-  btn.innerText = "✅ 确认修改";
-  btn.style.background = "linear-gradient(135deg, #34c759, #30b34d)"; 
+  const btn = document.getElementById('pass-save-btn'); btn.innerText = "✅ 确认修改"; btn.style.background = "linear-gradient(135deg, #34c759, #30b34d)"; 
   document.getElementById('pass-cancel-btn').style.display = "block"; 
 }
-
 function resetPassInput() {
-  document.getElementById('pass-title').value = '';
-  document.getElementById('pass-account').value = '';
-  document.getElementById('pass-secret').value = '';
-  document.getElementById('pass-url').value = '';
-  
+  document.getElementById('pass-title').value = ''; document.getElementById('pass-account').value = ''; document.getElementById('pass-secret').value = ''; document.getElementById('pass-url').value = '';
   editingPassId = null;
-  const btn = document.getElementById('pass-save-btn');
-  btn.innerText = "添加保存";
-  btn.style.background = ""; 
+  const btn = document.getElementById('pass-save-btn'); btn.innerText = "添加保存"; btn.style.background = ""; 
   document.getElementById('pass-cancel-btn').style.display = "none";
 }
-
 function renderPasswordList() {
-  const container = document.getElementById('password-list-container');
-  container.innerHTML = '';
-  
+  const container = document.getElementById('password-list-container'); container.innerHTML = '';
   const displayList = [...passwords].reverse();
-
   displayList.forEach((p) => {
-    const el = document.createElement('div');
-    el.className = 'password-item';
-    el.innerHTML = `
-      <div class="pass-info">
-        <span class="pass-title">${p.title}</span>
-        <span class="pass-detail">👤 ${p.account}</span>
-        <span class="pass-detail">🔑 <span class="masked-text">******</span></span>
-        ${p.url ? `<span class="pass-detail">🔗 ${p.url}</span>` : ''}
-      </div>
-      <div class="pass-actions">
-        <i class="fas fa-pen action-icon" onclick="editPassword(${p.id})" title="编辑修改"></i>
-        <i class="far fa-user action-icon" onclick="copyText('${p.account}', '账号')" title="复制账号"></i>
-        <i class="fas fa-key action-icon" onclick="copyText('${p.secret}', '密码')" title="复制密码"></i>
-        <i class="fas fa-trash-alt action-icon" style="color:#ff3b30" onclick="deletePassword(${p.id})" title="删除"></i>
-      </div>
-    `;
+    const el = document.createElement('div'); el.className = 'password-item';
+    el.innerHTML = `<div class="pass-info"><span class="pass-title">${p.title}</span><span class="pass-detail">👤 ${p.account}</span><span class="pass-detail">🔑 <span class="masked-text">******</span></span>${p.url ? `<span class="pass-detail">🔗 ${p.url}</span>` : ''}</div><div class="pass-actions"><i class="fas fa-pen action-icon" onclick="editPassword(${p.id})" title="编辑修改"></i><i class="far fa-user action-icon" onclick="copyText('${p.account}', '账号')" title="复制账号"></i><i class="fas fa-key action-icon" onclick="copyText('${p.secret}', '密码')" title="复制密码"></i><i class="fas fa-trash-alt action-icon" style="color:#ff3b30" onclick="deletePassword(${p.id})" title="删除"></i></div>`;
     container.appendChild(el);
   });
 }
-
 function copyText(text, type) {
-  if (!text) return;
-  const input = document.createElement('textarea');
-  input.value = text;
-  document.body.appendChild(input);
-  input.select();
-  document.execCommand('copy');
-  document.body.removeChild(input);
-  alert(`✅ ${type}已复制！`);
+  if (!text) return; const input = document.createElement('textarea'); input.value = text; document.body.appendChild(input); input.select(); document.execCommand('copy'); document.body.removeChild(input); alert(`✅ ${type}已复制！`);
 }
-
-function deletePassword(id) {
-  if(confirm("确定删除这条记录吗？")) {
-    passwords = passwords.filter(p => p.id !== id);
-    if (editingPassId === id) resetPassInput(); 
-    saveData();
-    renderPasswordList();
-  }
-}
-
+function deletePassword(id) { if(confirm("确定删除这条记录吗？")) { passwords = passwords.filter(p => p.id !== id); if (editingPassId === id) resetPassInput(); saveData(); renderPasswordList(); } }
 function exportPasswordsToText() {
   if (passwords.length === 0) { alert("空空如也"); return; }
   let content = `=== 我的密码本 ===\n导出时间: ${new Date().toLocaleString()}\n\n`;
   passwords.forEach(p => { content += `【${p.title}】\n账号: ${p.account}\n密码: ${p.secret}\n`; if(p.url) content += `备注: ${p.url}\n`; content += "------------------------------\n"; });
-  const blob = new Blob([content], { type: "text/plain" }); const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `我的密码本.txt`; a.click(); URL.revokeObjectURL(url);
+  const blob = new Blob([content], { type: "text/plain" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `我的密码本.txt`; a.click(); URL.revokeObjectURL(url);
 }
 
 // ==========================================
-// 6. 数据管理 (V8.0 强制版)
+// 6. 数据管理 (辅助设置 - 已补全)
 // ==========================================
 function loadData() {
   try {
@@ -494,9 +342,7 @@ function loadData() {
     const savedMemos = localStorage.getItem('myAppMemos'); if (savedMemos) memos = JSON.parse(savedMemos);
     const savedPasswords = localStorage.getItem('myAppPasswords'); if (savedPasswords) passwords = JSON.parse(savedPasswords);
   } catch (e) { console.error("数据修复中..."); }
-  renderAllTransactions();
-  renderTodos();
-  renderMemos();
+  renderAllTransactions(); renderTodos(); renderMemos();
 }
 function saveData() {
   try {
@@ -506,74 +352,50 @@ function saveData() {
     localStorage.setItem('myAppPasswords', JSON.stringify(passwords));
     localStorage.setItem('myAppCustomTags', JSON.stringify(customTags));
     localStorage.setItem('myAppTheme', JSON.stringify(currentTheme));
-  } catch(e) {
-    alert("❌ 数据保存失败！\n原因可能是手机存储空间已满或在无痕模式下。\n请尝试删除一些带图的动态。");
-  }
+  } catch(e) { alert("❌ 数据保存失败！\n原因可能是手机存储空间已满或在无痕模式下。"); }
 }
 
-// 辅助函数：手动拆解日期
-function getLocaLStart(dateStr) {
-  if(!dateStr) return 0;
-  const parts = dateStr.split(/[-/]/); 
-  return new Date(parts[0], parts[1]-1, parts[2], 0, 0, 0, 0).getTime();
+// 补全：设置弹窗相关函数
+function openSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'flex', 'important'); }
+function closeSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'none', 'important'); }
+function toggleMergeHelp() { const box = document.getElementById('merge-help-box'); if(box.style.display === 'none') box.style.display = 'block'; else box.style.display = 'none'; }
+function exportAllData() { const data = { transactions, memos, todos, passwords, customTags, currentTheme }; downloadJson(data, `备份_${new Date().toISOString().slice(0,10)}.json`); }
+function exportDataRange() {
+  const startStr = document.getElementById('export-start-date').value; const endStr = document.getElementById('export-end-date').value;
+  if (!startStr || !endStr) { alert("请选择范围"); return; }
+  const startTime = new Date(startStr + " 00:00:00").getTime(); const endTime = new Date(endStr + " 23:59:59").getTime();
+  const fTrans = transactions.filter(t => { const d = new Date(t.year, t.month-1, t.day).getTime(); return d >= startTime && d <= endTime; });
+  const fMemos = memos.filter(m => { const d = m.timestamp || 0; return d >= startTime && d <= endTime; });
+  downloadJson({ transactions: fTrans, memos: fMemos, todos, passwords }, `范围备份_${startStr}_${endStr}.json`);
 }
-function getLocalEnd(dateStr) {
-  if(!dateStr) return 0;
-  const parts = dateStr.split(/[-/]/);
-  return new Date(parts[0], parts[1]-1, parts[2], 23, 59, 59, 999).getTime();
+function downloadJson(data, filename) { const str = JSON.stringify(data); const blob = new Blob([str], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
+function importDataSmart(input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader(); reader.onload = function(e) {
+    try { const d = JSON.parse(e.target.result); if(confirm("确认导入?")) {
+      if(d.transactions) { const ids = new Set(transactions.map(t=>t.id)); d.transactions.forEach(t=>{ if(!ids.has(t.id)) transactions.push(t); }); }
+      if(d.memos) memos = [...memos, ...d.memos]; if(d.todos) todos = d.todos; if(d.passwords) passwords = [...passwords, ...d.passwords];
+      if(d.customTags) customTags = Array.from(new Set([...customTags, ...d.customTags]));
+      saveData(); location.reload();
+    }} catch(err) { alert("文件错误"); }
+  }; reader.readAsText(file);
 }
 
+// 补全：删除逻辑
+function getLocaLStart(dateStr) { if(!dateStr) return 0; const parts = dateStr.split(/[-/]/); return new Date(parts[0], parts[1]-1, parts[2], 0, 0, 0, 0).getTime(); }
+function getLocalEnd(dateStr) { if(!dateStr) return 0; const parts = dateStr.split(/[-/]/); return new Date(parts[0], parts[1]-1, parts[2], 23, 59, 59, 999).getTime(); }
 function deleteByDateRange() {
-  const s = document.getElementById('del-start-date').value; 
-  const e = document.getElementById('del-end-date').value;
-  const delT = document.getElementById('del-check-bill').checked; 
-  const delM = document.getElementById('del-check-memo').checked;
-
-  if (!s || !e) { alert("⚠️ 请选择日期范围"); return; }
-  if (!delT && !delM) { alert("⚠️ 请选择要删除的内容"); return; }
-
-  const st = getLocaLStart(s);
-  const et = getLocalEnd(e);
-  
+  const s = document.getElementById('del-start-date').value; const e = document.getElementById('del-end-date').value;
+  const delT = document.getElementById('del-check-bill').checked; const delM = document.getElementById('del-check-memo').checked;
+  if (!s || !e) { alert("⚠️ 请选择日期范围"); return; } if (!delT && !delM) { alert("⚠️ 请选择要删除的内容"); return; }
+  const st = getLocaLStart(s); const et = getLocalEnd(e);
   if(!confirm(`⚠️ 确定删除 ${s} 至 ${e} 期间的选中数据吗？`)) return;
-
-  const currentYear = new Date().getFullYear();
-  let countT = 0;
-  let countM = 0;
-
-  if (delT) {
-    const initialLen = transactions.length;
-    transactions = transactions.filter(t => {
-      let itemTime = Number(t.timestamp);
-      if (!itemTime) itemTime = new Date(t.year, t.month - 1, t.day).getTime();
-      return !(itemTime >= st && itemTime <= et); 
-    });
-    countT = initialLen - transactions.length;
-  }
-
-  if (delM) {
-    const initialLen = memos.length;
-    memos = memos.filter(m => {
-      let itemTime = Number(m.timestamp);
-      if (!itemTime && m.time) { const datePart = m.time.split(' ')[0].replace('月', '/').replace('日', ''); itemTime = new Date(`${currentYear}/${datePart} 00:00:00`).getTime(); }
-      if (!itemTime) return true; 
-      return !(itemTime >= st && itemTime <= et);
-    });
-    countM = initialLen - memos.length;
-  }
-  
-  saveData();
-  renderAllTransactions();
-  renderMemos();
-  
-  if (countT === 0 && countM === 0) {
-    alert("⚠️ 未找到该范围内的数据。");
-  } else {
-    alert(`✅ 已立即删除：\n- 账单：${countT} 笔\n- 动态：${countM} 条`);
-    closeSettingsModal();
-  }
+  let countT = 0; let countM = 0;
+  if (delT) { const initialLen = transactions.length; transactions = transactions.filter(t => { let itemTime = Number(t.timestamp); if (!itemTime) itemTime = new Date(t.year, t.month - 1, t.day).getTime(); return !(itemTime >= st && itemTime <= et); }); countT = initialLen - transactions.length; }
+  if (delM) { const initialLen = memos.length; memos = memos.filter(m => { let itemTime = Number(m.timestamp); if (!itemTime && m.time) { const datePart = m.time.split(' ')[0].replace('月', '/').replace('日', ''); itemTime = new Date(`${new Date().getFullYear()}/${datePart} 00:00:00`).getTime(); } if (!itemTime) return true; return !(itemTime >= st && itemTime <= et); }); countM = initialLen - memos.length; }
+  saveData(); renderAllTransactions(); renderMemos();
+  if (countT === 0 && countM === 0) { alert("⚠️ 未找到该范围内的数据。"); } else { alert(`✅ 已立即删除：\n- 账单：${countT} 笔\n- 动态：${countM} 条`); closeSettingsModal(); }
 }
-
 function clearAllData() { if(confirm("警告：将清空所有数据！确定吗？")) { localStorage.clear(); location.reload(); } }
 function toggleAllGroups() {
   isAllCollapsed = !isAllCollapsed;
@@ -610,7 +432,8 @@ function openThemeModal() { document.getElementById('theme-modal').style.setProp
 function closeThemeModal() { document.getElementById('theme-modal').style.setProperty('display', 'none', 'important'); }
 function lightenColor(col,amt) { var usePound=false; if(col[0]=="#"){col=col.slice(1);usePound=true;} var num=parseInt(col,16); var r=(num>>16)+amt; if(r>255)r=255;else if(r<0)r=0; var b=((num>>8)&0x00FF)+amt; if(b>255)b=255;else if(b<0)b=0; var g=(num&0x0000FF)+amt; if(g>255)g=255;else if(g<0)g=0; return (usePound?"#":"")+(g|(b<<8)|(r<<16)).toString(16).padStart(6,'0'); }
 function hexToRgba(hex,alpha) { if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){ let c=hex.substring(1).split(''); if(c.length==3)c=[c[0],c[0],c[1],c[1],c[2],c[2]]; c='0x'+c.join(''); return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')'; } return 'rgba(0,0,0,0.2)'; }
-function updateThemePreview() { const c=document.getElementById('main-theme-color').value; const g=document.getElementById('gradient-toggle').checked; document.getElementById('theme-preview').style.background = g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c; }
+function updateThemePreview() { const c=document.getElementById('main-theme-color').value; const g=document.getElementById('gradient-toggle').checked; document.getElementById('theme-preview').style.background = g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c; document.getElementById('theme-color-text').value = c; }
+function syncColorFromText() { const textVal = document.getElementById('theme-color-text').value; if (/^#[0-9A-F]{6}$/i.test(textVal)) { document.getElementById('main-theme-color').value = textVal; updateThemePreview(); } }
 function applyTheme() {
   const c=document.getElementById('main-theme-color').value; const g=document.getElementById('gradient-toggle').checked;
   const r=document.documentElement; r.style.setProperty('--main-color', c);
@@ -640,15 +463,8 @@ function switchPage(pageId, navElement) {
   if(navElement) navElement.classList.add('active');
 }
 function fillInput(val) { document.getElementById('item-input').value = val; }
-function deleteCustomTag(e, index) {
-  e.stopPropagation();
-  if(confirm(`删除标签“${customTags[index]}”?`)) { customTags.splice(index, 1); saveData(); renderTags(); }
-}
-function addCategoryFromInput() {
-  const input = document.getElementById('item-input');
-  const val = input.value.trim();
-  if (val && !fixedTags.includes(val) && !customTags.includes(val)) { customTags.push(val); saveData(); renderTags(); }
-}
+function deleteCustomTag(e, index) { e.stopPropagation(); if(confirm(`删除标签“${customTags[index]}”?`)) { customTags.splice(index, 1); saveData(); renderTags(); } }
+function addCategoryFromInput() { const input = document.getElementById('item-input'); const val = input.value.trim(); if (val && !fixedTags.includes(val) && !customTags.includes(val)) { customTags.push(val); saveData(); renderTags(); } }
 function openMemoFilter() { datePickerMode = 'filter_list'; document.getElementById('date-select-modal').style.setProperty('display', 'flex', 'important'); document.querySelector('#date-select-modal h3').innerText = "📅 筛选动态日期"; }
 function clearMemoFilter() { currentMemoFilter = null; document.getElementById('filter-status-bar').style.display = 'none'; document.getElementById('clear-filter-btn').style.display = 'none'; renderMemos(); }
 function confirmGenerateMindMap() { closeDateSelectModal(); document.getElementById('mindmap-modal').style.setProperty('display', 'flex', 'important'); const startStr = document.getElementById('mindmap-start-date').value; const endStr = document.getElementById('mindmap-end-date').value; generateMindMapWithDate(startStr, endStr); }
@@ -673,25 +489,3 @@ function renderMindMapWithData(list) {
   if(mindMapChart) mindMapChart.dispose(); mindMapChart=echarts.init(document.getElementById('echarts-container')); mindMapChart.setOption(opt); window.onresize=function(){mindMapChart.resize();};
 }
 function switchMindMapMode(m) { mindMapMode=m; document.getElementById('btn-fruit').classList.toggle('active',m==='fruit'); document.getElementById('btn-flower').classList.toggle('active',m==='flower'); const s=document.getElementById('mindmap-start-date').value; const e=document.getElementById('mindmap-end-date').value; generateMindMapWithDate(s,e); }
-
-// ==========================================
-// 7. 新增：主题颜色同步逻辑 (V9.0 精准控色版)
-// ==========================================
-function updateThemePreview() { 
-  const c = document.getElementById('main-theme-color').value; 
-  const g = document.getElementById('gradient-toggle').checked; 
-  // 同步文字框
-  document.getElementById('theme-color-text').value = c;
-  
-  document.getElementById('theme-preview').style.background = g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c; 
-}
-
-// 当用户修改文本框时，同步回取色器
-function syncColorFromText() {
-  const textVal = document.getElementById('theme-color-text').value;
-  // 简单校验是否为Hex格式
-  if (/^#[0-9A-F]{6}$/i.test(textVal)) {
-    document.getElementById('main-theme-color').value = textVal;
-    updateThemePreview();
-  }
-}
