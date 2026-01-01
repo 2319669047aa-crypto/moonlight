@@ -74,6 +74,10 @@ input, textarea, select { padding: 12px; border: 1px solid #e5e5e5; border-radiu
 .bill-money { font-size: 18px; color: var(--main-color); font-weight: bold; }
 .delete-btn { color: #ccc; cursor: pointer; padding: 5px; font-size: 14px; }
 .delete-btn:hover { color: #ff3b30; }
+/* 新增：修改按钮样式 */
+.bill-edit-btn { color: #007aff; cursor: pointer; padding: 5px; font-size: 14px; margin-right: 5px; }
+.bill-edit-btn:hover { color: #0056b3; }
+
 .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 60px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); display: flex; justify-content: space-around; align-items: center; border-top: 1px solid #c6c6c8; z-index: 150;}
 .nav-item { display: flex; flex-direction: column; align-items: center; color: #999; font-size: 10px; cursor: pointer; }
 .nav-item i { font-size: 24px; margin-bottom: 2px; }
