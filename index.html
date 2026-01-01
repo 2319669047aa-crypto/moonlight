@@ -1,10 +1,20 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>我的生活果树</title>
+  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="apple-touch-icon" href="https://img.icons8.com/color/452/apple-orchard.png">
+  <link rel="icon" type="image/png" href="https://img.icons8.com/color/452/apple-orchard.png">
 </head>
-
 <body>
 
   <div id="page-accounting" class="page active-page">
@@ -15,7 +25,6 @@
         <div class="icon-btn-header" onclick="openSettingsModal()"><i class="fas fa-cog"></i></div>
       </div>
     </header>
-
     <div class="content">
       <div class="input-group">
         <input type="number" id="money-input" placeholder="金额 (¥)">
@@ -43,7 +52,6 @@
         <div class="icon-btn-header" onclick="openSettingsModal()"><i class="fas fa-cog"></i></div>
       </div>
     </header>
-    
     <div class="content">
       <div class="top-bar-row">
         <div class="view-toggle-bar">
@@ -55,10 +63,7 @@
           <button class="icon-btn-small" id="clear-filter-btn" onclick="clearMemoFilter()" style="display:none; color:#ff3b30;" title="清除筛选"><i class="fas fa-times"></i></button>
         </div>
       </div>
-      
-      <div id="filter-status-bar" style="display:none; background:#fff3cd; color:#856404; padding:8px; font-size:12px; border-radius:8px; margin-bottom:15px; text-align:center;">
-        当前显示：<span id="filter-range-text"></span> 的动态
-      </div>
+      <div id="filter-status-bar" style="display:none; background:#fff3cd; color:#856404; padding:8px; font-size:12px; border-radius:8px; margin-bottom:15px; text-align:center;">当前显示：<span id="filter-range-text"></span> 的动态</div>
 
       <div id="memo-view-list">
         <div class="section-title">📌 待办计划</div>
@@ -88,25 +93,17 @@
       </div>
 
       <div id="memo-view-calendar" style="display: none;">
-        <div class="calendar-header-row">
-          <h3 id="memo-calendar-title" style="margin:0;">2026年</h3>
-        </div>
+        <div class="calendar-header-row"><h3 id="memo-calendar-title" style="margin:0;"></h3></div>
         <div class="week-header"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
         <div id="memo-calendar-grid" class="calendar-grid photo-calendar"></div>
-        <p style="text-align:center; color:#999; font-size:12px; margin-top:20px;">📅 点击有照片的格子，查看完整大图</p>
+        <p style="text-align:center; color:#999; font-size:12px; margin-top:20px;">📅 点击照片格子查看详情</p>
       </div>
     </div>
   </div>
 
   <nav class="bottom-nav">
-    <div class="nav-item active" onclick="switchPage('accounting', this)">
-      <i class="fas fa-wallet"></i>
-      <span>记账</span>
-    </div>
-    <div class="nav-item" onclick="switchPage('memo', this)">
-      <i class="fas fa-camera-retro"></i>
-      <span>动态</span>
-    </div>
+    <div class="nav-item active" onclick="switchPage('accounting', this)"><i class="fas fa-wallet"></i><span>记账</span></div>
+    <div class="nav-item" onclick="switchPage('memo', this)"><i class="fas fa-camera-retro"></i><span>动态</span></div>
   </nav>
 
   <div id="chart-modal" class="modal">
@@ -130,12 +127,10 @@
       <span class="close-btn" onclick="closeThemeModal()">&times;</span>
       <h3>🎨 个性化主题</h3>
       <div class="theme-control-row">
-        <label>选择主题色:</label>
-        <div class="color-wrapper"><input type="color" id="main-theme-color" value="#007aff" onchange="updateThemePreview()"></div>
+        <label>选择主题色:</label><div class="color-wrapper"><input type="color" id="main-theme-color" value="#007aff" onchange="updateThemePreview()"></div>
       </div>
       <div class="theme-control-row">
-        <label>开启流光渐变:</label>
-        <label class="switch"><input type="checkbox" id="gradient-toggle" checked onchange="updateThemePreview()"><span class="slider round"></span></label>
+        <label>开启流光渐变:</label><label class="switch"><input type="checkbox" id="gradient-toggle" checked onchange="updateThemePreview()"><span class="slider round"></span></label>
       </div>
       <div id="theme-preview" class="theme-preview-box"><span style="color:white; font-weight:bold;">预览 Preview</span></div>
       <button class="gradient-btn" onclick="applyTheme()" style="margin-top: 20px; width: 100%;">确认应用</button>
@@ -147,34 +142,21 @@
     <div class="modal-content" style="max-width: 320px;">
       <span class="close-btn" onclick="closeSettingsModal()">&times;</span>
       <h3>⚙️ 数据管理中心</h3>
-      <button class="gradient-btn" onclick="openDateSelectModal('tree')" style="margin-bottom: 20px; width: 100%; background: linear-gradient(135deg, #FF9F40, #FF6384); box-shadow: 0 4px 12px rgba(255, 99, 132, 0.3);">
-        <i class="fas fa-apple-alt"></i> 生成生活果树
-      </button>
+      <button class="gradient-btn" onclick="openDateSelectModal('tree')" style="margin-bottom: 20px; width: 100%; background: linear-gradient(135deg, #FF9F40, #FF6384); box-shadow: 0 4px 12px rgba(255, 99, 132, 0.3);"><i class="fas fa-apple-alt"></i> 生成生活果树</button>
       <div style="border-top: 1px solid #eee; margin-bottom: 15px;"></div>
       <h4 class="settings-sub-title">🗑️ 范围删除</h4>
-      <div class="date-range-row">
-        <input type="date" id="del-start-date"><span>至</span><input type="date" id="del-end-date">
-      </div>
-      <div class="checkbox-group">
-        <label class="checkbox-label"><input type="checkbox" id="del-check-bill" checked> 💰 记账</label>
-        <label class="checkbox-label"><input type="checkbox" id="del-check-memo" checked> 📝 动态</label>
-      </div>
+      <div class="date-range-row"><input type="date" id="del-start-date"><span>至</span><input type="date" id="del-end-date"></div>
+      <div class="checkbox-group"><label class="checkbox-label"><input type="checkbox" id="del-check-bill" checked> 💰 记账</label><label class="checkbox-label"><input type="checkbox" id="del-check-memo" checked> 📝 动态</label></div>
       <button class="outline-btn" onclick="deleteByDateRange()" style="border-color:#ff3b30; color:#ff3b30; font-size:13px; padding:6px; margin-bottom: 15px;">确认删除</button>
       <div style="border-top: 1px solid #eee; margin-bottom: 15px;"></div>
       <h4 class="settings-sub-title">📥 范围导出 (备份)</h4>
-      <div class="date-range-row">
-        <input type="date" id="export-start-date"><span>至</span><input type="date" id="export-end-date">
-      </div>
+      <div class="date-range-row"><input type="date" id="export-start-date"><span>至</span><input type="date" id="export-end-date"></div>
       <div style="display: flex; gap:10px; margin-bottom:15px;">
         <button class="outline-btn" onclick="exportDataRange()" style="flex:1; font-size:13px; padding:6px;"><i class="fas fa-filter"></i> 导出选中</button>
         <button class="outline-btn" onclick="exportAllData()" style="flex:1; font-size:13px; padding:6px;"><i class="fas fa-download"></i> 导出全部</button>
       </div>
-      <h4 class="settings-sub-title" style="display:flex; align-items:center;">
-        📤 数据恢复 <i class="fas fa-question-circle help-icon" onclick="toggleMergeHelp()" style="margin-left:8px; color:#007aff; cursor:pointer;"></i>
-      </h4>
-      <div id="merge-help-box" class="tip-box" style="display:none; background:#eef6ff; border-color:#d0e3ff; color:#0056b3; margin-bottom:10px;">
-        <b>💡 智能合并：</b>不覆盖，仅补充。<br>
-      </div>
+      <h4 class="settings-sub-title" style="display:flex; align-items:center;">📤 数据恢复 <i class="fas fa-question-circle help-icon" onclick="toggleMergeHelp()" style="margin-left:8px; color:#007aff; cursor:pointer;"></i></h4>
+      <div id="merge-help-box" class="tip-box" style="display:none; background:#eef6ff; border-color:#d0e3ff; color:#0056b3; margin-bottom:10px;"><b>💡 智能合并：</b>不覆盖现有数据，仅补充。<br><hr style="border:0; border-top:1px solid #cbdcf7; margin:5px 0;"><b>⚠️ 替换：</b>请先删除旧数据再导入。</div>
       <div style="position: relative; margin-bottom: 20px;">
         <button class="outline-btn" style="width: 100%; border-color: #007aff; color: #007aff;"><i class="fas fa-plus-circle"></i> 智能合并导入</button>
         <input type="file" id="import-file" onchange="importDataSmart(this)" style="position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;">
@@ -188,10 +170,8 @@
       <span class="close-btn" onclick="closeDateSelectModal()">&times;</span>
       <h3 style="margin-bottom: 15px;">📅 选择时间范围</h3>
       <div class="date-range-row" style="flex-direction:column; align-items:stretch;">
-        <label style="font-size:12px;color:#999">开始日期</label>
-        <input type="date" id="common-start-date" style="width:100%">
-        <label style="font-size:12px;color:#999; margin-top:5px;">结束日期</label>
-        <input type="date" id="common-end-date" style="width:100%">
+        <label style="font-size:12px;color:#999">开始日期</label><input type="date" id="common-start-date" style="width:100%">
+        <label style="font-size:12px;color:#999; margin-top:5px;">结束日期</label><input type="date" id="common-end-date" style="width:100%">
       </div>
       <button id="date-confirm-btn" class="gradient-btn" style="margin-top: 20px; width: 100%;">确定</button>
     </div>
@@ -224,10 +204,8 @@
         <button class="gradient-btn" onclick="addPassword()" style="margin-top:10px; width:100%;">添加保存</button>
       </div>
       <div id="password-list-container" style="max-height: 35vh; overflow-y: auto;"></div>
-      <button class="outline-btn" onclick="exportPasswordsToText()" style="width:100%; margin-top:15px; border-color:#999; color:#555; font-size:13px;">
-        <i class="fas fa-file-alt"></i> 导出为文本文件 (TXT)
-      </button>
-      <p style="font-size:12px; color:#ff3b30; text-align:center; margin-top:10px;">⚠️ 仅保存在本地。请勿存储银行卡等高风险密码。</p>
+      <button class="outline-btn" onclick="exportPasswordsToText()" style="width:100%; margin-top:15px; border-color:#999; color:#555; font-size:13px;"><i class="fas fa-file-alt"></i> 导出为文本文件 (TXT)</button>
+      <p style="font-size:12px; color:#ff3b30; text-align:center; margin-top:10px;">⚠️ 仅保存在本地。</p>
     </div>
   </div>
 
@@ -244,4 +222,6 @@
     </div>
   </div>
 
+  <script src="script.js"></script>
 </body>
+</html>
