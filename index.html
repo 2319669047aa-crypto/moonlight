@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>我的生活果树</title>
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+  <link id="dynamic-font-link" rel="stylesheet" href="">
 
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -151,7 +149,28 @@
     <div class="modal-content" style="max-width: 320px;">
       <span class="close-btn" onclick="closeSettingsModal()">&times;</span>
       <h3>⚙️ 数据管理中心</h3>
+      
+      <div style="background: #fff; border: 1px solid #eee; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+        <h4 class="settings-sub-title" style="margin-bottom: 10px;">🔤 字体切换</h4>
+        
+        <select id="saved-font-select" onchange="switchSavedFont()" style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #ddd; background: #f9f9f9;">
+          <option value="system">📱 系统默认字体</option>
+          </select>
+
+        <div style="border-top: 1px dashed #eee; padding-top: 10px; margin-top: 5px;">
+          <p style="font-size: 12px; color: #999; margin-bottom: 5px;">添加新字体 (Google Fonts 链接)</p>
+          <input type="text" id="new-font-url" placeholder="🔗 CSS 链接 (留空为本地字体)" style="margin-bottom: 5px; font-size: 12px;">
+          <input type="text" id="new-font-name" placeholder="📝 字体名称 (如: Ma Shan Zheng)" style="margin-bottom: 8px; font-size: 12px;">
+          
+          <div style="display: flex; gap: 5px;">
+            <button class="outline-btn" onclick="addNewFont()" style="padding: 6px; font-size: 12px;">➕ 添加并使用</button>
+            <button class="text-btn" onclick="deleteCurrentFont()" style="width: auto; color: #ff3b30; font-size: 12px;">🗑️ 删除当前</button>
+          </div>
+        </div>
+      </div>
+
       <button class="gradient-btn" onclick="openDateSelectModal('tree')" style="margin-bottom: 20px; width: 100%; background: linear-gradient(135deg, #FF9F40, #FF6384); box-shadow: 0 4px 12px rgba(255, 99, 132, 0.3);"><i class="fas fa-apple-alt"></i> 生成生活果树</button>
+      
       <div style="border-top: 1px solid #eee; margin-bottom: 15px;"></div>
       <h4 class="settings-sub-title">🗑️ 范围删除</h4>
       <div class="date-range-row"><input type="date" id="del-start-date"><span>至</span><input type="date" id="del-end-date"></div>
