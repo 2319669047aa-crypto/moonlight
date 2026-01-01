@@ -38,6 +38,9 @@ window.onload = function() {
   renderTags();
   const pill = document.querySelector('.toggle-pill');
   if(pill) switchMemoView('list', pill); 
+  
+  // 🟢 修复核心：绑定日期确认按钮的点击事件
+  document.getElementById('date-confirm-btn').onclick = handleDateConfirm;
 };
 
 // 点击空白关闭弹窗
@@ -332,7 +335,7 @@ function exportPasswordsToText() {
 }
 
 // ==========================================
-// 6. 数据管理 (辅助设置 - 已补全)
+// 6. 数据管理
 // ==========================================
 function loadData() {
   try {
@@ -355,7 +358,6 @@ function saveData() {
   } catch(e) { alert("❌ 数据保存失败！\n原因可能是手机存储空间已满或在无痕模式下。"); }
 }
 
-// 补全：设置弹窗相关函数
 function openSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'flex', 'important'); }
 function closeSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'none', 'important'); }
 function toggleMergeHelp() { const box = document.getElementById('merge-help-box'); if(box.style.display === 'none') box.style.display = 'block'; else box.style.display = 'none'; }
@@ -381,7 +383,6 @@ function importDataSmart(input) {
   }; reader.readAsText(file);
 }
 
-// 补全：删除逻辑
 function getLocaLStart(dateStr) { if(!dateStr) return 0; const parts = dateStr.split(/[-/]/); return new Date(parts[0], parts[1]-1, parts[2], 0, 0, 0, 0).getTime(); }
 function getLocalEnd(dateStr) { if(!dateStr) return 0; const parts = dateStr.split(/[-/]/); return new Date(parts[0], parts[1]-1, parts[2], 23, 59, 59, 999).getTime(); }
 function deleteByDateRange() {
@@ -489,3 +490,23 @@ function renderMindMapWithData(list) {
   if(mindMapChart) mindMapChart.dispose(); mindMapChart=echarts.init(document.getElementById('echarts-container')); mindMapChart.setOption(opt); window.onresize=function(){mindMapChart.resize();};
 }
 function switchMindMapMode(m) { mindMapMode=m; document.getElementById('btn-fruit').classList.toggle('active',m==='fruit'); document.getElementById('btn-flower').classList.toggle('active',m==='flower'); const s=document.getElementById('mindmap-start-date').value; const e=document.getElementById('mindmap-end-date').value; generateMindMapWithDate(s,e); }
+
+// ==========================================
+// 🟢 补全：日期确认按钮的处理逻辑
+// ==========================================
+function handleDateConfirm() {
+  const s = document.getElementById('common-start-date').value;
+  const e = document.getElementById('common-end-date').value;
+  if (datePickerMode === 'tree') {
+    closeDateSelectModal();
+    document.getElementById('mindmap-modal').style.setProperty('display', 'flex', 'important');
+    generateMindMapWithDate(s, e);
+  } else {
+    currentMemoFilter = { start: s, end: e };
+    document.getElementById('filter-status-bar').style.display = 'block';
+    document.getElementById('filter-range-text').innerText = `${s} 至 ${e}`;
+    document.getElementById('clear-filter-btn').style.display = 'flex';
+    renderMemos();
+    closeDateSelectModal();
+  }
+}
