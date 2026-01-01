@@ -16,6 +16,8 @@ let mindMapMode = 'fruit';
 let datePickerMode = 'tree'; 
 let currentMemoFilter = null; 
 let editingPassId = null;
+// 新增：正在修改日期的账单ID
+let currentEditingBillId = null;
 
 const monthFruits = ['🍊','🍓','🍍','🍒','🍈','🍑','🍉','🍇','🍐','🍎','🍌','🥝'];
 const monthFlowers = ['🌺','🌸','🌷','🌹','💐','🪷','🌻','🌼','🏵️','🍁','🥀','❄️'];
@@ -84,7 +86,7 @@ function saveNewTitle(elementId, newValue) {
 }
 
 // ==========================================
-// 3. 记账核心逻辑
+// 3. 记账核心逻辑 (更新：增加修改日期图标)
 // ==========================================
 function addBill() {
   const moneyInput = document.getElementById('money-input');
@@ -149,6 +151,7 @@ function renderAllTransactions() {
         <span class="bill-name">${t.item}</span>
         <div class="bill-right">
           <span class="bill-money">-${t.money}</span>
+          <i class="fas fa-edit bill-edit-btn" onclick="openEditBillModal(${t.id})" title="修改日期"></i>
           <i class="fas fa-trash-alt delete-btn" onclick="deleteBill(${t.id})"></i>
         </div>`;
       contentDiv.appendChild(billDiv);
@@ -201,6 +204,56 @@ function addCategoryFromInput() {
 }
 function fillInput(val) { document.getElementById('item-input').value = val; }
 function deleteCustomTag(e, index) { e.stopPropagation(); if(confirm(`删除标签?`)) { customTags.splice(index, 1); saveData(); renderTags(); } }
+
+// === 新增：账单日期修改逻辑 ===
+function openEditBillModal(id) {
+  currentEditingBillId = id;
+  document.getElementById('edit-bill-modal').style.setProperty('display', 'flex', 'important');
+  // 尝试设置当前日期
+  const item = transactions.find(t => t.id === id);
+  if(item) {
+    // 简单格式化 YYYY-MM-DD 适配 input type=date
+    const y = item.year;
+    const m = item.month < 10 ? '0'+item.month : item.month;
+    const d = item.day < 10 ? '0'+item.day : item.day;
+    document.getElementById('new-bill-date').value = `${y}-${m}-${d}`;
+  }
+}
+
+function closeEditBillModal() {
+  document.getElementById('edit-bill-modal').style.setProperty('display', 'none', 'important');
+  currentEditingBillId = null;
+}
+
+function saveBillDateChange() {
+  const dateStr = document.getElementById('new-bill-date').value;
+  if (!dateStr || !currentEditingBillId) {
+    alert("请选择日期");
+    return;
+  }
+  
+  const index = transactions.findIndex(t => t.id === currentEditingBillId);
+  if (index === -1) return;
+
+  // 解析新日期 (避免时区问题，手动拆解)
+  const parts = dateStr.split('-'); // 2026-01-05
+  const newYear = parseInt(parts[0]);
+  const newMonth = parseInt(parts[1]);
+  const newDay = parseInt(parts[2]);
+
+  // 更新该条账单数据
+  transactions[index].year = newYear;
+  transactions[index].month = newMonth;
+  transactions[index].day = newDay;
+  transactions[index].dateString = `${newYear}年${newMonth}月${newDay}日`;
+  // 更新时间戳，保持小时分钟为0或当前时间，为了排序简单，设为该日中午
+  transactions[index].timestamp = new Date(newYear, newMonth - 1, newDay, 12, 0, 0).getTime();
+
+  saveData();
+  renderAllTransactions();
+  closeEditBillModal();
+  alert("日期修改成功！");
+}
 
 // ==========================================
 // 4. 备忘录 & 动态
