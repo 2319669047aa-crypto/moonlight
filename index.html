@@ -7,14 +7,9 @@
   
   <link id="dynamic-font-link" rel="stylesheet" href="">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
-
   <link rel="stylesheet" href="style.css">
   
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 
@@ -156,21 +151,20 @@
       <span class="close-btn" onclick="closeSettingsModal()">&times;</span>
       <h3>⚙️ 数据管理中心</h3>
       
-      <div style="background: #fff; border: 1px solid #eee; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
-        <h4 class="settings-sub-title" style="margin-bottom: 10px;">🔤 字体切换</h4>
+      <div style="background: #f8f8fa; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; border: 1px solid #eee;">
+        <h4 class="settings-sub-title" style="margin-bottom: 10px;">🔤 字体设置</h4>
         
-        <select id="saved-font-select" onchange="switchSavedFont()" style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #ddd; background: #f9f9f9;">
+        <select id="saved-font-select" onchange="switchSavedFont()" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ddd; background: white;">
           <option value="system">📱 系统默认字体</option>
           </select>
 
-        <div style="border-top: 1px dashed #eee; padding-top: 10px; margin-top: 5px;">
+        <div style="border-top: 1px dashed #ddd; padding-top: 10px;">
           <p style="font-size: 12px; color: #999; margin-bottom: 5px;">添加新字体 (Google Fonts 链接)</p>
-          <input type="text" id="new-font-url" placeholder="🔗 CSS 链接 (留空为本地字体)" style="margin-bottom: 5px; font-size: 12px;">
-          <input type="text" id="new-font-name" placeholder="📝 字体名称 (如: Ma Shan Zheng)" style="margin-bottom: 8px; font-size: 12px;">
-          
-          <div style="display: flex; gap: 5px;">
-            <button class="outline-btn" onclick="addNewFont()" style="padding: 6px; font-size: 12px;">➕ 添加并使用</button>
-            <button class="text-btn" onclick="deleteCurrentFont()" style="width: auto; color: #ff3b30; font-size: 12px;">🗑️ 删除当前</button>
+          <input type="text" id="new-font-url" placeholder="🔗 粘贴 CSS 链接" style="margin-bottom: 5px; font-size: 12px;">
+          <input type="text" id="new-font-name" placeholder="📝 输入字体名称 (如: Nunito)" style="margin-bottom: 8px; font-size: 12px;">
+          <div style="display:flex; gap:10px;">
+             <button class="outline-btn" onclick="addNewFont()" style="padding: 6px; font-size: 12px; flex: 2;">➕ 添加并应用</button>
+             <button class="text-btn" onclick="deleteCurrentFont()" style="padding: 6px; font-size: 12px; color: #ff3b30; flex: 1; border: 1px solid #ff3b30; margin-top:0; border-radius:10px;">🗑️ 删除</button>
           </div>
         </div>
       </div>
