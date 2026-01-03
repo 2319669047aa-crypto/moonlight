@@ -1,0 +1,877 @@
+// ==========================================
+// 1. 全局变量定义
+// ==========================================
+var transactions = [];
+var memos = [];
+var todos = [];
+var passwords = []; 
+var fixedTags = ['早餐', '午餐', '晚餐', '夜宵', '奶茶', '零食', '交通', '购物'];
+var customTags = [];
+var savedFonts = [];
+var periods = []; 
+// 注意：移除了 titles 的默认 Emoji
+var currentTheme = { color: '#007aff', gradient: true, titles: { accounting: "本月支出", memo: "个人动态" }, footerText: "📅 点击格子查看详情", fontUrl: '', fontName: '' };
+var currentImageBase64 = null; 
+var currentMemoFilter = null; 
+var editingPassId = null;
+var currentEditingBillId = null;
+
+var renderedMemoCount = 0;
+const MEMO_PAGE_SIZE = 10;
+
+var modalPeriodMonth = new Date(); 
+var selectedDateForAction = null; 
+var editingPeriodIndex = -1; 
+var reportViewMonth = new Date();
+var myChart = null;
+var isAllCollapsed = false; // 记录折叠状态
+
+var editingMemoIndex = -1;
+var targetMemoIndexForBg = -1; 
+
+// ==========================================
+// 2. IndexedDB 帮助类
+// ==========================================
+const dbHelper = {
+  dbName: 'SunMoonDiaryDB',
+  storeName: 'images',
+  db: null,
+  
+  open() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, 1);
+      request.onerror = (event) => { console.error("Database error:", event.target.error); reject(event.target.error); };
+      request.onsuccess = (event) => { this.db = event.target.result; resolve(this.db); };
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName, { keyPath: 'id' });
+        }
+      };
+    });
+  },
+
+  saveImage(id, base64) {
+    return new Promise((resolve, reject) => {
+      if(!this.db) { reject("DB not open"); return; }
+      const tx = this.db.transaction([this.storeName], 'readwrite');
+      const store = tx.objectStore(this.storeName);
+      store.put({ id: id, data: base64 });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject();
+    });
+  },
+
+  getImage(id) {
+    return new Promise((resolve, reject) => {
+      if(!this.db) { resolve(null); return; } 
+      const tx = this.db.transaction([this.storeName], 'readonly');
+      const store = tx.objectStore(this.storeName);
+      const req = store.get(id);
+      req.onsuccess = () => resolve(req.result ? req.result.data : null);
+      req.onerror = () => resolve(null);
+    });
+  },
+  
+  deleteImage(id) {
+    if(!this.db) return;
+    const tx = this.db.transaction([this.storeName], 'readwrite');
+    tx.objectStore(this.storeName).delete(id);
+  }
+};
+
+// ==========================================
+// 3. 页面初始化
+// ==========================================
+window.onload = async function() {
+  dbHelper.open().catch(e => console.log("DB background init"));
+  
+  loadData();
+  loadTheme();
+  renderTags(); 
+  
+  const pill = document.querySelector('.toggle-pill');
+  if(pill) switchMemoView('list', pill);
+  
+  const dateBtn = document.getElementById('date-confirm-btn');
+  if(dateBtn) dateBtn.onclick = handleDateConfirm;
+};
+
+window.onclick = function(event) {
+  if (event.target.classList.contains('modal')) {
+    event.target.style.setProperty('display', 'none', 'important');
+  }
+}
+
+// ==========================================
+// 4. 核心功能函数
+// ==========================================
+
+function saveData() {
+  const data = {
+    transactions: transactions,
+    memos: memos.map(m => ({
+      ...m, 
+      imageId: m.imageId, 
+      bgImageId: m.bgImageId, 
+      text: m.text, 
+      time: m.time, 
+      timestamp: m.timestamp, 
+      bgPos: m.bgPos,
+      isCalendarCover: m.isCalendarCover
+    })), 
+    todos: todos,
+    passwords: passwords,
+    customTags: customTags,
+    savedFonts: savedFonts,
+    periods: periods 
+  };
+  localStorage.setItem('myAppData', JSON.stringify(data));
+  localStorage.setItem('myAppTheme', JSON.stringify(currentTheme));
+}
+
+function loadData() {
+  const d = localStorage.getItem('myAppData');
+  if (d) {
+    try {
+        const p = JSON.parse(d);
+        if(p.transactions) transactions = p.transactions;
+        if(p.memos) memos = p.memos;
+        if(p.todos) todos = p.todos;
+        if(p.passwords) passwords = p.passwords;
+        if(p.customTags) customTags = p.customTags;
+        if(p.savedFonts) savedFonts = p.savedFonts;
+        if(p.periods) periods = p.periods; 
+    } catch(e) { console.error("Data parse error", e); }
+  }
+  renderAllTransactions();
+  renderTodos();
+  renderTags();
+  renderFontOptions();
+}
+
+// 记账
+function addBill() {
+  const moneyInput = document.getElementById('money-input');
+  const itemInput = document.getElementById('item-input');
+  const money = parseFloat(moneyInput.value);
+  const item = itemInput.value.trim();
+  
+  if (!item || isNaN(money) || money === 0) { alert('金额和用途都要填哦'); return; }
+  
+  if (!fixedTags.includes(item) && !customTags.includes(item)) { 
+    customTags.push(item); 
+    renderTags(); 
+  }
+  
+  const id = Date.now(); const now = new Date();
+  const newBill = {
+    id: id, item: item, money: money,
+    dateString: `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`,
+    year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(),
+    timestamp: now.getTime()
+  };
+  transactions.unshift(newBill); 
+  saveData(); 
+  renderAllTransactions(); 
+  moneyInput.value = ''; itemInput.value = '';
+}
+
+function renderAllTransactions() {
+  const container = document.getElementById('bill-container');
+  if(!container) return;
+  container.innerHTML = ''; 
+  if (transactions.length === 0) { container.innerHTML = '<div style="text-align:center; color:#ccc; padding:20px;">还没有记账哦</div>'; return; }
+  const groups = {};
+  transactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  transactions.forEach(t => {
+    if(!t.dateString) t.dateString = `${t.year}年${t.month}月${t.day}日`;
+    if (!groups[t.dateString]) groups[t.dateString] = [];
+    groups[t.dateString].push(t);
+  });
+  Object.keys(groups).forEach(dateStr => {
+    const dayTotal = groups[dateStr].reduce((sum, t) => sum + t.money, 0);
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'date-group'; groupDiv.style.padding = "0"; 
+    groupDiv.innerHTML = `<div class="date-header" onclick="toggleThisGroup(this)"><span>${dateStr} <span style="font-size:12px;color:#999;margin-left:5px">¥${dayTotal}</span></span><i class="fas fa-chevron-down arrow-icon"></i></div><div class="date-content"></div>`;
+    const contentDiv = groupDiv.querySelector('.date-content');
+    groups[dateStr].forEach(t => {
+      const billDiv = document.createElement('div');
+      billDiv.className = 'bill-item';
+      billDiv.innerHTML = `
+        <span class="bill-name">${t.item}</span>
+        <div class="bill-right">
+          <span class="bill-money">-${t.money}</span>
+          <i class="fas fa-edit bill-edit-btn" onclick="openEditBillModal(${t.id})" title="修改日期"></i>
+          <i class="fas fa-trash-alt delete-btn" onclick="deleteBill(${t.id})"></i>
+        </div>`;
+      contentDiv.appendChild(billDiv);
+    });
+    container.appendChild(groupDiv);
+  });
+}
+
+function toggleThisGroup(header) {
+  const content = header.nextElementSibling;
+  const arrow = header.querySelector('.arrow-icon');
+  if (content.classList.contains('hidden')) { content.classList.remove('hidden'); arrow.style.transform = 'rotate(0deg)'; } 
+  else { content.classList.add('hidden'); arrow.style.transform = 'rotate(-90deg)'; }
+}
+
+function toggleAllGroups() {
+  isAllCollapsed = !isAllCollapsed;
+  const contents = document.querySelectorAll('.date-content');
+  const arrows = document.querySelectorAll('.arrow-icon');
+  const btn = document.getElementById('toggle-all-btn');
+
+  contents.forEach(el => {
+    if(isAllCollapsed) el.classList.add('hidden');
+    else el.classList.remove('hidden');
+  });
+  
+  arrows.forEach(el => {
+    el.style.transform = isAllCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+  });
+
+  if(btn) {
+      if(isAllCollapsed) btn.innerHTML = '<i class="fas fa-expand-alt"></i> 一键展开所有日期';
+      else btn.innerHTML = '<i class="fas fa-compress-alt"></i> 一键收起所有日期';
+  }
+}
+
+function deleteBill(id) {
+  if(!confirm("删除这条账单？")) return;
+  transactions = transactions.filter(t => t.id !== id); 
+  saveData(); renderAllTransactions(); 
+}
+
+function renderTags() {
+  const container = document.getElementById('tags-wrapper');
+  if(!container) return;
+  container.innerHTML = '';
+  fixedTags.forEach(tag => {
+    const el = document.createElement('div'); el.className = 'tag-fixed'; el.innerText = tag;
+    el.onclick = () => { document.getElementById('item-input').value = tag; };
+    container.appendChild(el);
+  });
+  if (Array.isArray(customTags)) {
+    customTags.forEach((tag, index) => {
+      const el = document.createElement('div'); el.className = 'tag-custom';
+      el.innerHTML = `<span onclick="fillInput('${tag}')">${tag}</span><span class="tag-del-icon" onclick="deleteCustomTag(event, ${index})">&times;</span>`;
+      container.appendChild(el);
+    });
+  }
+}
+function addCategoryFromInput() {
+  const input = document.getElementById('item-input'); const val = input.value.trim();
+  if (!val) { alert("请先输入标签名"); return; }
+  if (fixedTags.includes(val) || customTags.includes(val)) { alert("标签已存在"); input.value = ''; return; }
+  customTags.push(val); saveData(); renderTags(); input.value = '';
+}
+function fillInput(val) { document.getElementById('item-input').value = val; }
+function deleteCustomTag(e, index) { 
+  e.stopPropagation(); 
+  if(confirm(`删除标签?`)) { customTags.splice(index, 1); saveData(); renderTags(); } 
+}
+
+// 待办
+function addTodo() {
+  const input = document.getElementById('todo-input'); const text = input.value.trim();
+  if(!text) return; 
+  todos.unshift({ text: text, completed: false, timestamp: Date.now() }); 
+  saveData(); renderTodos(); input.value = '';
+}
+function toggleTodo(timestamp) {
+    const idx = todos.findIndex(t => t.timestamp === timestamp);
+    if(idx !== -1) { todos[idx].completed = !todos[idx].completed; saveData(); renderTodos(); }
+}
+function deleteTodo(e, timestamp) {
+    e.stopPropagation(); if(confirm('删除?')) { todos = todos.filter(t => t.timestamp !== timestamp); saveData(); renderTodos(); }
+}
+function renderTodos() {
+  const activeContainer = document.getElementById('todo-list'); 
+  const completedContainer = document.getElementById('todo-completed-list');
+  const toggleBtn = document.getElementById('todo-completed-toggle');
+  if(!activeContainer) return;
+  activeContainer.innerHTML = ''; completedContainer.innerHTML = '';
+  const activeTodos = todos.filter(t => !t.completed);
+  const completedTodos = todos.filter(t => t.completed);
+  activeTodos.forEach(t => activeContainer.appendChild(createTodoElement(t)));
+  completedTodos.forEach(t => completedContainer.appendChild(createTodoElement(t)));
+  document.getElementById('completed-count').innerText = completedTodos.length;
+  if(completedTodos.length > 0) toggleBtn.style.display = 'block'; else { toggleBtn.style.display = 'none'; completedContainer.style.display = 'none'; }
+}
+function createTodoElement(t) {
+    const el = document.createElement('div'); el.className = `todo-item ${t.completed ? 'completed' : ''}`;
+    el.onclick = () => toggleTodo(t.timestamp); 
+    el.innerHTML = `<div class="todo-left"><div class="check-circle"><i class="fas fa-check"></i></div><span class="todo-text">${t.text}</span></div><i class="fas fa-trash-alt todo-del-btn" onclick="deleteTodo(event, ${t.timestamp})"></i>`;
+    return el;
+}
+function toggleCompletedTodos() {
+    const list = document.getElementById('todo-completed-list');
+    list.style.display = (list.style.display === 'none') ? 'block' : 'none';
+}
+
+// 动态
+function triggerFileInput() { document.getElementById('file-input').click(); }
+function handleFileSelect(input) {
+  if (input.files && input.files[0]) {
+    const file = input.files[0]; const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image(); img.src = e.target.result;
+      img.onload = function() {
+        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+        const maxWidth = 800; let width = img.width; let height = img.height;
+        if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+        canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height);
+        currentImageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
+        document.getElementById('preview-img').src = currentImageBase64;
+        document.getElementById('image-preview-area').style.display = 'inline-block';
+      };
+    }; reader.readAsDataURL(file);
+  }
+}
+function clearImage() { currentImageBase64 = null; document.getElementById('file-input').value = ''; document.getElementById('image-preview-area').style.display = 'none'; }
+
+function triggerCardBgUpdate(index) { targetMemoIndexForBg = index; document.getElementById('card-bg-input-global').click(); }
+function handleCardBgGlobalChange(input) {
+  if (input.files && input.files[0] && targetMemoIndexForBg !== -1) {
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+      if (memos[targetMemoIndexForBg]) {
+        const id = memos[targetMemoIndexForBg].timestamp + "_bg"; 
+        await dbHelper.saveImage(id, e.target.result); 
+        memos[targetMemoIndexForBg].bgImageId = id; memos[targetMemoIndexForBg].bgPos = 50; 
+        saveData(); renderMemos(); alert("卡片背景已更新！");
+      }
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+// 🟢 修复：自定义背景实时预览 (vertical position)
+function updateBgPos(index, val) { 
+    if(memos[index]) { 
+        memos[index].bgPos = val; 
+        const card = document.getElementById(`memo-card-${index}`); 
+        if(card) card.style.backgroundPosition = `center ${val}%`; 
+    } 
+}
+// 🟢 新增：切换卡片工具条显示
+function toggleCardTools(index) {
+    const el = document.getElementById(`card-tools-${index}`);
+    if(!el) return;
+    if(el.style.display === 'none') el.style.display = 'block';
+    else el.style.display = 'none';
+}
+function saveBgPos(index) { saveData(); document.getElementById(`card-tools-${index}`).style.display = 'none'; }
+
+function setCalendarCover(index) {
+    const target = memos[index];
+    if(!target) return;
+    const targetDate = new Date(target.timestamp);
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+    const day = targetDate.getDate();
+    let hasChanged = false;
+    memos.forEach(m => {
+        const mDate = new Date(m.timestamp);
+        if(mDate.getFullYear() === year && mDate.getMonth() === month && mDate.getDate() === day) {
+            if (m.isCalendarCover) { m.isCalendarCover = false; hasChanged = true; }
+        }
+    });
+    target.isCalendarCover = true;
+    saveData();
+    alert("已设为封面！日历将优先显示此条内容。");
+    if(document.getElementById('memo-view-calendar').style.display !== 'none') { renderMemoCalendar(); } 
+}
+
+async function addMemo() {
+  const memoInput = document.getElementById('memo-input'); const text = memoInput.value;
+  if (text === '' && !currentImageBase64) { alert("写点东西吧"); return; }
+  const now = new Date();
+  let timeString = `${now.getMonth()+1}月${now.getDate()}日 ${now.getHours()}:${now.getMinutes()<10?'0'+now.getMinutes():now.getMinutes()}`;
+  let timestamp = Date.now();
+  if (editingMemoIndex !== -1) {
+     const editTimeVal = document.getElementById('memo-edit-time').value;
+     if(editTimeVal) {
+        const d = new Date(editTimeVal); timestamp = d.getTime();
+        timeString = `${d.getMonth()+1}月${d.getDate()}日 ${d.getHours()}:${d.getMinutes()<10?'0'+d.getMinutes():d.getMinutes()}`;
+     } else { timestamp = memos[editingMemoIndex].timestamp; timeString = memos[editingMemoIndex].time; }
+  }
+  let imgId = null;
+  if (currentImageBase64) { imgId = timestamp + "_img"; await dbHelper.saveImage(imgId, currentImageBase64); }
+  const newMemo = { 
+    text: text, time: timeString, imageId: imgId, timestamp: timestamp,
+    bgImageId: editingMemoIndex !== -1 ? memos[editingMemoIndex].bgImageId : null,
+    bgPos: editingMemoIndex !== -1 ? memos[editingMemoIndex].bgPos : 50,
+    isCalendarCover: false 
+  };
+  if (editingMemoIndex === -1) { memos.unshift(newMemo); } 
+  else {
+    if (memos[editingMemoIndex].imageId && memos[editingMemoIndex].imageId !== imgId) dbHelper.deleteImage(memos[editingMemoIndex].imageId);
+    newMemo.isCalendarCover = memos[editingMemoIndex].isCalendarCover;
+    memos[editingMemoIndex] = newMemo; alert("修改成功！"); resetMemoInput();
+  }
+  saveData(); renderedMemoCount = 0; await renderMemos(); 
+  if (editingMemoIndex === -1) { memoInput.value = ''; clearImage(); }
+}
+
+async function editMemo(index) {
+  editingMemoIndex = index; const m = memos[index];
+  document.getElementById('memo-input').value = m.text;
+  document.getElementById('edit-time-container').style.display = 'block';
+  const d = new Date(m.timestamp);
+  const isoStr = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0,16);
+  document.getElementById('memo-edit-time').value = isoStr;
+  if (m.imageId) {
+    const imgData = await dbHelper.getImage(m.imageId);
+    if(imgData) { currentImageBase64 = imgData; document.getElementById('preview-img').src = imgData; document.getElementById('image-preview-area').style.display = 'inline-block'; }
+  } else { clearImage(); }
+  document.getElementById('publish-memo-btn').innerText = "确认修改";
+  document.getElementById('cancel-memo-edit-btn').style.display = 'block';
+  document.querySelector('.content').scrollTop = 0;
+}
+function resetMemoInput() { editingMemoIndex = -1; document.getElementById('memo-input').value = ''; document.getElementById('edit-time-container').style.display = 'none'; clearImage(); document.getElementById('publish-memo-btn').innerText = "发布"; document.getElementById('cancel-memo-edit-btn').style.display = 'none'; }
+
+async function renderMemos() {
+  const container = document.getElementById('memo-container'); 
+  if(renderedMemoCount === 0) container.innerHTML = '';
+  let displayList = memos;
+  if (currentMemoFilter) {
+    const startTime = new Date(currentMemoFilter.start + " 00:00:00").getTime();
+    const endTime = new Date(currentMemoFilter.end + " 23:59:59").getTime();
+    displayList = displayList.filter(m => m.timestamp >= startTime && m.timestamp <= endTime);
+  }
+  const keyword = document.getElementById('memo-search-input').value.trim();
+  if (keyword) displayList = displayList.filter(m => m.text && m.text.includes(keyword));
+  const total = displayList.length;
+  if(!currentMemoFilter && !keyword) {
+      if (renderedMemoCount === 0) renderedMemoCount = MEMO_PAGE_SIZE; 
+      displayList = displayList.slice(0, renderedMemoCount);
+      const loadBtn = document.getElementById('load-more-btn');
+      if (renderedMemoCount < total) loadBtn.style.display = 'block'; else loadBtn.style.display = 'none';
+  } else { document.getElementById('load-more-btn').style.display = 'none'; }
+  if(displayList.length === 0) { container.innerHTML = '<div style="text-align:center; color:#ccc; margin-top:20px;">暂无动态</div>'; return; }
+  container.innerHTML = '';
+  for (let i = 0; i < displayList.length; i++) {
+      const m = displayList[i]; const realIndex = memos.indexOf(m);
+      const newCard = document.createElement('div'); newCard.className = 'memo-card'; newCard.id = `memo-card-${realIndex}`;
+      if (m.bgImageId) {
+        dbHelper.getImage(m.bgImageId).then(bg => { if(bg) { newCard.style.backgroundImage = `url(${bg})`; newCard.style.backgroundPosition = `center ${m.bgPos || 50}%`; } });
+      }
+      let imgHtml = ''; if (m.imageId) { const imgData = await dbHelper.getImage(m.imageId); if(imgData) imgHtml = `<img src="${imgData}" class="memo-img-display" loading="lazy">`; }
+      newCard.innerHTML = `
+        <div id="card-tools-${realIndex}" class="bg-adjust-tools" style="display:none">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button class="outline-btn" style="padding:6px 12px; font-size:12px; flex:none;" onclick="triggerCardBgUpdate(${realIndex})">📷 换背景图</button>
+                <div style="flex:1; display:flex; align-items:center; gap:5px;">
+                    <span style="font-size:10px; color:#666;">↕️ 位置</span>
+                    <input type="range" min="0" max="100" value="${m.bgPos || 50}" oninput="updateBgPos(${realIndex}, this.value)" style="flex:1; margin:0;">
+                </div>
+                <button class="save-bg-btn" onclick="saveBgPos(${realIndex})">OK</button>
+            </div>
+        </div>
+        <span class="memo-text">${m.text || ''}</span>
+        ${imgHtml}
+        <div class="memo-footer">
+          <span class="memo-date">${m.time}</span>
+          <div class="memo-actions-wrapper"> 
+            <span class="memo-action-btn" onclick="setCalendarCover(${realIndex})"><i class="fas fa-calendar-check"></i> 设为封面</span>
+            <span class="memo-action-btn" onclick="editMemo(${realIndex})"><i class="fas fa-pen"></i> 修改</span>
+            <span class="memo-action-btn delete" onclick="deleteMemo(${realIndex})"><i class="fas fa-trash"></i> 删除</span>
+            <span class="memo-action-btn" onclick="toggleCardTools(${realIndex})"><i class="fas fa-image"></i> 自定义</span>
+          </div>
+        </div>`;
+      container.appendChild(newCard);
+  }
+}
+function loadMoreMemos() { renderedMemoCount += MEMO_PAGE_SIZE; renderMemos(); }
+function deleteMemo(index) { if(confirm("删除动态？")) { const m = memos[index]; if(m.imageId) dbHelper.deleteImage(m.imageId); if(m.bgImageId) dbHelper.deleteImage(m.bgImageId); memos.splice(index, 1); saveData(); renderedMemoCount = 0; renderMemos(); } }
+
+function switchMemoView(view, btn) {
+  document.querySelectorAll('.toggle-pill').forEach(b => b.classList.remove('active')); if (btn) btn.classList.add('active');
+  const listView = document.getElementById('memo-view-list'); const calendarView = document.getElementById('memo-view-calendar');
+  if (view === 'list') { listView.style.display = 'block'; calendarView.style.display = 'none'; } 
+  else { listView.style.display = 'none'; calendarView.style.display = 'block'; renderMemoCalendar(); }
+}
+
+function renderMemoCalendar() {
+  const displayDate = new Date(); 
+  const year = displayDate.getFullYear();
+  const month = displayDate.getMonth();
+  
+  document.getElementById('memo-calendar-title').innerText = `${year}年${month+1}月`;
+  const grid = document.getElementById('memo-calendar-grid'); 
+  if(!grid) return; 
+  grid.innerHTML = '';
+  
+  const daysInMonth = new Date(year, month + 1, 0).getDate(); 
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  
+  const dayGroups = {};
+  memos.forEach(m => {
+    let mDate; 
+    if (m.timestamp) { mDate = new Date(m.timestamp); } 
+    if (mDate && mDate.getFullYear() === year && mDate.getMonth() === month) { 
+        const day = mDate.getDate(); 
+        if(!dayGroups[day]) dayGroups[day] = [];
+        dayGroups[day].push(m);
+    }
+  });
+
+  for (let i = 0; i < firstDayIndex; i++) grid.appendChild(document.createElement('div'));
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cell = document.createElement('div'); 
+    cell.className = 'day-cell'; 
+    cell.id = `cal-day-${d}`;
+    
+    const dayDiv = document.createElement('div'); 
+    dayDiv.className = 'day-num'; 
+    dayDiv.innerText = d;
+    cell.appendChild(dayDiv); 
+    grid.appendChild(cell);
+    
+    if (dayGroups[d] && dayGroups[d].length > 0) {
+        const candidates = dayGroups[d];
+        candidates.sort((a, b) => {
+            if (a.isCalendarCover && !b.isCalendarCover) return -1;
+            if (!a.isCalendarCover && b.isCalendarCover) return 1;
+            const aHasImg = !!a.imageId;
+            const bHasImg = !!b.imageId;
+            if (aHasImg && !bHasImg) return -1;
+            if (!aHasImg && bHasImg) return 1;
+            return (b.timestamp || 0) - (a.timestamp || 0);
+        });
+        renderCellContent(d, candidates[0]);
+    }
+  }
+}
+
+async function renderCellContent(day, m) {
+    const cell = document.getElementById(`cal-day-${day}`); 
+    if(!cell) return;
+    cell.innerHTML = ''; 
+    const div = document.createElement('div'); 
+    div.className = 'day-num'; 
+    div.innerText = day;
+    
+    let imgData = null; 
+    if(m.imageId) imgData = await dbHelper.getImage(m.imageId);
+    
+    div.onclick = function() { 
+        if (m.imageId) {
+             dbHelper.getImage(m.imageId).then(img => openDayDetail(img, m.text, m.time));
+        } else {
+             openDayDetail(null, m.text, m.time);
+        }
+    };
+
+    if(imgData) { 
+        div.classList.add('has-photo'); 
+        div.style.backgroundImage = `url(${imgData})`; 
+        div.style.backgroundPosition = 'center center';
+        div.style.backgroundSize = 'cover';
+    } else {
+        // 🟢 美化：仅文字格子 -> 动态应用极淡主题色背景
+        div.style.backgroundColor = hexToRgba(currentTheme.color, 0.12); 
+        div.style.color = currentTheme.color; 
+    }
+    
+    cell.appendChild(div);
+}
+
+function toggleCalendarDates() { 
+    const grid = document.getElementById('memo-calendar-grid'); 
+    const checkbox = document.getElementById('hide-calendar-dates'); 
+    if(checkbox.checked) grid.classList.add('hide-date-text'); 
+    else grid.classList.remove('hide-date-text'); 
+}
+
+function openDayDetail(image, text, dateStr) { document.getElementById('detail-img').src = image || ''; document.getElementById('detail-img').style.display = image ? 'block' : 'none'; document.getElementById('detail-text').innerText = text || (image ? "（仅照片）" : "无动态"); document.getElementById('detail-date').innerText = dateStr; document.getElementById('day-detail-modal').style.setProperty('display', 'flex', 'important'); }
+function closeDayDetail() { document.getElementById('day-detail-modal').style.setProperty('display', 'none', 'important'); }
+
+// 生理期
+function openPeriodModal() { 
+    document.getElementById('period-manage-modal').style.setProperty('display', 'flex', 'important'); 
+    modalPeriodMonth = new Date(); 
+    selectedDateForAction = null; 
+    editingPeriodIndex = -1; 
+    document.getElementById('selected-period-date').innerText = "请点击日历选择日期"; 
+    renderPeriodList(); 
+    renderPeriodModalCalendar(); 
+}
+function closePeriodModal() { document.getElementById('period-manage-modal').style.setProperty('display', 'none', 'important'); }
+function changePeriodModalMonth(offset) { modalPeriodMonth.setMonth(modalPeriodMonth.getMonth() + offset); renderPeriodModalCalendar(); }
+
+// 🟢 修复：生理期日历点击反馈
+function renderPeriodModalCalendar() {
+  const year = modalPeriodMonth.getFullYear(); 
+  const month = modalPeriodMonth.getMonth();
+  document.getElementById('period-modal-title').innerText = `${year}年${month+1}月`;
+  
+  const grid = document.getElementById('period-modal-grid'); grid.innerHTML = '';
+  const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDayIndex = new Date(year, month, 1).getDay();
+  
+  for (let i = 0; i < firstDayIndex; i++) grid.appendChild(document.createElement('div'));
+  
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cell = document.createElement('div'); cell.className = 'day-cell';
+    const dayDiv = document.createElement('div'); dayDiv.className = 'day-num'; dayDiv.innerText = d;
+    
+    const mStr = (month + 1).toString().padStart(2, '0');
+    const dStr = d.toString().padStart(2, '0');
+    const cellDateStr = `${year}-${mStr}-${dStr}`;
+
+    periods.forEach((p) => {
+      if (p.end) {
+          if (cellDateStr > p.start && cellDateStr < p.end) dayDiv.classList.add('period-marker-range');
+          if (cellDateStr === p.start) { dayDiv.classList.add('period-marker-start'); dayDiv.classList.remove('period-marker-range'); }
+          if (cellDateStr === p.end) { dayDiv.classList.add('period-marker-end'); dayDiv.classList.remove('period-marker-range'); }
+      } else {
+          if (cellDateStr === p.start) dayDiv.classList.add('period-marker-single');
+      }
+    });
+    
+    // 如果是当前选中的操作日期，加上粉色高亮
+    if (selectedDateForAction === cellDateStr) dayDiv.classList.add('selected-temp');
+    
+    dayDiv.onclick = () => { 
+        selectedDateForAction = cellDateStr; 
+        document.getElementById('selected-period-date').innerText = selectedDateForAction; 
+        renderPeriodModalCalendar(); // 重新渲染以显示高亮
+    };
+    cell.appendChild(dayDiv); grid.appendChild(cell);
+  }
+}
+function setPeriodStart() { if (!selectedDateForAction) { alert("请先点击日历上的日期"); return; } savePeriodRecord(selectedDateForAction, null); }
+function setPeriodEnd() { if (!selectedDateForAction) { alert("请先点击日历上的日期"); return; } const targetTs = new Date(selectedDateForAction).getTime(); let candidates = periods.map((p, i) => ({...p, index: i})).filter(p => !p.end && new Date(p.start).getTime() <= targetTs); candidates.sort((a, b) => new Date(b.start) - new Date(a.start)); if (candidates.length > 0) { if(confirm(`匹配到 ${candidates[0].start} 的记录，是否设为结束日？`)) { periods[candidates[0].index].end = selectedDateForAction; savePeriodDataAndRefresh(); } } else { alert("未找到匹配的开始记录"); } }
+function setPeriodStartOnly() { if (!selectedDateForAction) { alert("请先点击日历上的日期"); return; } periods.push({ start: selectedDateForAction, end: null, isSingle: true }); savePeriodDataAndRefresh(); alert("已添加单日记录"); }
+function savePeriodRecord(start, end) { if(editingPeriodIndex !== -1) { periods[editingPeriodIndex].start = start; if(end) periods[editingPeriodIndex].end = end; } else { periods.push({ start: start, end: end }); } savePeriodDataAndRefresh(); }
+function savePeriodDataAndRefresh() { saveData(); editingPeriodIndex = -1; selectedDateForAction = null; document.getElementById('selected-period-date').innerText = "请选择日期"; renderPeriodList(); renderPeriodModalCalendar(); }
+function renderPeriodList() { const container = document.getElementById('period-list-container'); container.innerHTML = ''; const sortedPeriods = periods.map((p, index) => ({...p, originalIndex: index})).sort((a, b) => new Date(b.start) - new Date(a.start)); sortedPeriods.forEach((p) => { const div = document.createElement('div'); const isEditing = (p.originalIndex === editingPeriodIndex); div.className = `period-item ${isEditing ? 'editing' : ''}`; let displayHtml = ""; if (p.isSingle) displayHtml = `<span class="period-date-single">${p.start}</span> <span class="period-tag-single">仅记录开始</span>`; else if (p.end) { const diff = Math.ceil(Math.abs(new Date(p.end) - new Date(p.start)) / (1000 * 60 * 60 * 24)) + 1; displayHtml = `<span class="period-date-single">${p.start}</span> <i class="fas fa-arrow-right" style="font-size:10px;color:#ccc;margin:0 5px;"></i> <span class="period-date-single">${p.end}</span> <span style="font-size:11px;color:#999;margin-left:5px;">(${diff}天)</span>`; } else displayHtml = `<span class="period-date-single">${p.start}</span> <span class="period-tag-single" style="color:green;border-color:green;background:#e6fffa;">进行中</span>`; div.innerHTML = `<div style="flex:1;"><div class="period-date-row">${displayHtml}</div></div><div class="period-actions"><i class="fas fa-trash-alt" onclick="deletePeriodList(event, ${p.originalIndex})"></i></div>`; div.onclick = (e) => { if(e.target.classList.contains('fa-trash-alt')) return; editingPeriodIndex = p.originalIndex; modalPeriodMonth = new Date(p.start); alert(`已选中 ${p.start} 的记录，请在日历上点击修改`); renderPeriodList(); renderPeriodModalCalendar(); }; container.appendChild(div); }); }
+function deletePeriodList(e, index) { e.stopPropagation(); if(confirm("删除此记录？")) { periods.splice(index, 1); saveData(); renderPeriodList(); renderPeriodModalCalendar(); } }
+
+function openEditBillModal(id) { currentEditingBillId = id; document.getElementById('edit-bill-modal').style.setProperty('display', 'flex', 'important'); }
+function closeEditBillModal() { document.getElementById('edit-bill-modal').style.setProperty('display', 'none', 'important'); }
+function openThemeModal() { document.getElementById('theme-modal').style.setProperty('display', 'flex', 'important'); }
+function closeThemeModal() { document.getElementById('theme-modal').style.setProperty('display', 'none', 'important'); }
+function openSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'flex', 'important'); }
+function closeSettingsModal() { document.getElementById('settings-modal').style.setProperty('display', 'none', 'important'); }
+function closeReport() { document.getElementById('chart-modal').style.setProperty('display', 'none', 'important'); }
+function switchReportTab(type, btn) { document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab')); btn.classList.add('active-tab'); if (type === 'chart') { document.getElementById('view-chart').style.display = 'block'; document.getElementById('view-calendar').style.display = 'none'; } else { document.getElementById('view-chart').style.display = 'none'; document.getElementById('view-calendar').style.display = 'block'; } }
+function switchPage(pageId, navElement) { document.querySelectorAll('.page').forEach(p => { p.classList.remove('active-page'); p.style.setProperty('display', 'none', 'important'); }); const target = document.getElementById('page-' + pageId); if (target) { target.classList.add('active-page'); target.style.setProperty('display', 'block', 'important'); } document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active')); if(navElement) navElement.classList.add('active'); }
+function openMemoFilter() { document.getElementById('date-select-modal').style.setProperty('display', 'flex', 'important'); }
+function closeDateSelectModal() { document.getElementById('date-select-modal').style.setProperty('display', 'none', 'important'); }
+function handleDateConfirm() { const s = document.getElementById('common-start-date').value; const e = document.getElementById('common-end-date').value; currentMemoFilter = { start: s, end: e }; document.getElementById('filter-status-bar').style.display = 'block'; document.getElementById('filter-range-text').innerText = `${s} 至 ${e}`; document.getElementById('clear-filter-btn').style.display = 'flex'; renderMemos(); closeDateSelectModal(); }
+function clearMemoFilter() { currentMemoFilter = null; document.getElementById('filter-status-bar').style.display = 'none'; document.getElementById('clear-filter-btn').style.display = 'none'; renderMemos(); }
+function editCalendarFooter() { const newText = prompt("请输入日历底部签名:", currentTheme.footerText); if(newText) { currentTheme.footerText = newText; document.getElementById('memo-calendar-footer').innerText = newText; saveData(); } }
+function showReport() { document.getElementById('chart-modal').style.setProperty('display', 'flex', 'important'); reportViewMonth = new Date(); updateReportView(); }
+function changeReportMonth(offset) { reportViewMonth.setMonth(reportViewMonth.getMonth() + offset); updateReportView(); }
+
+// 🟢 修复：添加回标题编辑功能
+function editPageTitle(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const currentText = currentTheme.titles[elementId.replace('title-', '')] || el.innerText;
+    el.innerHTML = `
+        <div class="title-edit-wrapper" onclick="event.stopPropagation()">
+            <input type="text" id="${elementId}-input" value="${currentText}" maxlength="6">
+            <div class="title-save-btn" onclick="savePageTitle('${elementId}')"><i class="fas fa-check"></i></div>
+        </div>
+    `;
+    const input = document.getElementById(`${elementId}-input`);
+    if(input) input.focus();
+}
+
+function savePageTitle(elementId) {
+    const input = document.getElementById(`${elementId}-input`);
+    if (!input) return;
+    const newText = input.value.trim();
+    if (newText) {
+        const key = elementId.replace('title-', '');
+        currentTheme.titles[key] = newText;
+        saveData();
+        loadTheme(); 
+    }
+}
+
+function loadTheme() {
+    const t = localStorage.getItem('myAppTheme');
+    if (t) {
+        try {
+            const parsed = JSON.parse(t);
+            if(parsed.color) currentTheme.color = parsed.color;
+            if(parsed.gradient !== undefined) currentTheme.gradient = parsed.gradient;
+            if(parsed.titles) currentTheme.titles = parsed.titles;
+            if(parsed.footerText) currentTheme.footerText = parsed.footerText;
+            if(parsed.fontName) currentTheme.fontName = parsed.fontName;
+            if(parsed.fontUrl) currentTheme.fontUrl = parsed.fontUrl;
+        } catch(e) {}
+    }
+    document.documentElement.style.setProperty('--main-color', currentTheme.color);
+    document.documentElement.style.setProperty('--theme-gradient', currentTheme.gradient ? `linear-gradient(135deg, ${currentTheme.color}, ${lightenColor(currentTheme.color,40)})` : currentTheme.color);
+    document.documentElement.style.setProperty('--theme-shadow', `0 4px 12px ${hexToRgba(currentTheme.color,0.4)}`);
+    
+    // 应用标题 (这里去掉了Emoji)
+    if(currentTheme.titles.accounting) document.getElementById('title-accounting').innerText = currentTheme.titles.accounting;
+    if(currentTheme.titles.memo) document.getElementById('title-memo').innerText = currentTheme.titles.memo;
+    if(currentTheme.footerText) document.getElementById('memo-calendar-footer').innerText = currentTheme.footerText;
+
+    if(currentTheme.fontUrl && currentTheme.fontName) {
+        applyCustomFont(currentTheme.fontUrl, currentTheme.fontName);
+    }
+    
+    document.getElementById('main-theme-color').value = currentTheme.color;
+    document.getElementById('gradient-toggle').checked = currentTheme.gradient;
+    updateThemePreview();
+}
+
+function copyText(txt, label) { 
+  if (navigator.clipboard && window.isSecureContext) {
+     navigator.clipboard.writeText(txt).then(() => alert(`${label}已复制`));
+  } else {
+     const textArea = document.createElement("textarea");
+     textArea.value = txt;
+     document.body.appendChild(textArea);
+     textArea.select();
+     try {
+       document.execCommand('copy');
+       alert(`${label}已复制`);
+     } catch (err) {
+       alert('复制失败，请手动复制');
+     }
+     document.body.removeChild(textArea);
+  }
+}
+
+function updateReportView() {
+  const y = reportViewMonth.getFullYear();
+  const m = reportViewMonth.getMonth();
+  
+  document.getElementById('report-month-title').innerText = `${y}年 ${m+1}月`;
+  const calTitle = document.getElementById('calendar-title');
+  if(calTitle) calTitle.innerText = `${y}年${m+1}月`;
+
+  const stats = {};
+  const dayStats = {};
+  let totalExpense = 0;
+
+  transactions.forEach(t => {
+    if (t.year === y && t.month === m + 1) {
+      stats[t.item] = (stats[t.item] || 0) + t.money;
+      dayStats[t.day] = (dayStats[t.day] || 0) + t.money;
+      totalExpense += t.money;
+    }
+  });
+
+  const ctx = document.getElementById('expense-chart').getContext('2d');
+  if (myChart) myChart.destroy();
+
+  const labels = Object.keys(stats);
+  const data = Object.values(stats);
+  
+  if (labels.length > 0) {
+    const aestheticColors = [
+      '#FF9AA2', '#FFB7B2', '#FFDAC1', '#E2F0CB', '#B5EAD7', '#C7CEEA', 
+      '#90CCF4', '#F3D250', '#F78888', '#93A9D1', '#ECC19C', '#1E847F',
+      '#A2D5F2', '#07689F', '#FF7E67', '#FAFA6E'
+    ];
+    
+    myChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: labels.map((_, i) => aestheticColors[i % aestheticColors.length]),
+          borderWidth: 2,
+          borderColor: '#ffffff' 
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false, 
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15, font: { size: 11 } } },
+          title: { 
+            display: true, 
+            text: `总支出: ¥${totalExpense.toFixed(1)}`,
+            padding: { bottom: 20 },
+            font: { size: 16 }
+          }
+        }
+      }
+    });
+  } else {
+    myChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ["本月无支出"],
+        datasets: [{ data: [1], backgroundColor: ["#f0f0f0"], borderWidth: 0 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { tooltip: { enabled: false }, legend: { display: false } }
+      }
+    });
+  }
+
+  const g = document.getElementById('calendar-grid');
+  g.innerHTML = '';
+  
+  const dim = new Date(y, m + 1, 0).getDate(); 
+  const start = new Date(y, m, 1).getDay();    
+  const today = new Date();
+
+  for (let i = 0; i < start; i++) {
+    const empty = document.createElement('div');
+    g.appendChild(empty);
+  }
+
+  for (let d = 1; d <= dim; d++) {
+    const c = document.createElement('div');
+    c.className = 'day-cell';
+    
+    if (today.getFullYear() === y && today.getMonth() === m && today.getDate() === d) {
+      c.classList.add('today');
+    }
+
+    let inner = `<div class="day-num">${d}</div>`;
+    if (dayStats[d]) {
+      inner += `<div class="day-total" style="color:${currentTheme.color}">-${dayStats[d]}</div>`;
+    } else {
+       inner += `<div class="day-total" style="opacity:0">-</div>`;
+    }
+    c.innerHTML = inner;
+    g.appendChild(c);
+  }
+}
+
+function deleteByDateRange() { const s=document.getElementById('del-start-date').value; const e=document.getElementById('del-end-date').value; if(!s||!e){alert("请选择日期");return;} if(!confirm("确定删除？")) return; const st=new Date(s+" 00:00:00").getTime(); const et=new Date(e+" 23:59:59").getTime(); if(document.getElementById('del-check-bill').checked) transactions=transactions.filter(t=>(t.timestamp||0)<st||(t.timestamp||0)>et); if(document.getElementById('del-check-memo').checked) memos=memos.filter(m=>{ const tt=m.timestamp; if(tt>=st&&tt<=et){ if(m.imageId) dbHelper.deleteImage(m.imageId); if(m.bgImageId) dbHelper.deleteImage(m.bgImageId); return false; } return true; }); saveData(); alert("删除完成"); renderAllTransactions(); renderMemos(); }
+function exportDataRange() { const s=document.getElementById('export-start-date').value; const e=document.getElementById('export-end-date').value; if(!s||!e){alert("请选择日期");return;} const st=new Date(s+" 00:00:00").getTime(); const et=new Date(e+" 23:59:59").getTime(); const exp={transactions:[],memos:[]}; exp.transactions=transactions.filter(t=>(t.timestamp||0)>=st&&(t.timestamp||0)<=et); exp.memos=memos.filter(m=>m.timestamp>=st&&m.timestamp<=et); const b=new Blob([JSON.stringify(exp)],{type:"application/json"}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`export_${s}_${e}.json`; a.click(); }
+function compressOldBills() { if(!confirm("确定要压缩4个月前的详细账单吗？\n此操作不可逆！")) return; const now=new Date(); const fourMonthsAgo=new Date(now.getFullYear(),now.getMonth()-3,1).getTime(); let oldT=[], keepT=[]; transactions.forEach(t=>{ let tt=t.timestamp; if(!tt) tt=new Date(t.year,t.month-1,t.day).getTime(); if(tt<fourMonthsAgo) oldT.push(t); else keepT.push(t); }); if(oldT.length===0){alert("无需压缩");return;} const sumMap={}; oldT.forEach(t=>{ const k=`${t.year}-${t.month}-${t.item}`; if(!sumMap[k]) sumMap[k]={year:t.year,month:t.month,item:t.item,money:0}; sumMap[k].money+=t.money; }); const sums=Object.values(sumMap).map((s,i)=>({id:Date.now()+i,item:s.item,money:s.money,isSummary:true,dateString:`${s.year}年${s.month}月(汇总)`,year:s.year,month:s.month,day:new Date(s.year,s.month,0).getDate(),timestamp:new Date(s.year,s.month-1,1).getTime()})); transactions=[...keepT,...sums]; saveData(); renderAllTransactions(); alert("压缩成功"); }
+function addNewFont() { const url = document.getElementById('new-font-url').value.trim(); const name = document.getElementById('new-font-name').value.trim(); if(!name) { alert("请输入字体名称"); return; } savedFonts.push({ name: name, url: url }); currentTheme.fontName = name; currentTheme.fontUrl = url; saveData(); applyCustomFont(url, name); renderFontOptions(); document.getElementById('saved-font-select').value = savedFonts.length - 1; document.getElementById('new-font-url').value = ''; document.getElementById('new-font-name').value = ''; alert("字体添加并应用成功！"); }
+function switchSavedFont() { const val = document.getElementById('saved-font-select').value; if(val === 'system') { currentTheme.fontName = ''; currentTheme.fontUrl = ''; applyCustomFont('', ''); } else { const font = savedFonts[val]; if(font) { currentTheme.fontName = font.name; currentTheme.fontUrl = font.url; applyCustomFont(font.url, font.name); } } saveData(); }
+function deleteCurrentFont() { const val = document.getElementById('saved-font-select').value; if(val === 'system') { alert("系统字体不能删除"); return; } if(confirm("确定删除这个字体配置吗？")) { savedFonts.splice(val, 1); currentTheme.fontName = ''; currentTheme.fontUrl = ''; applyCustomFont('', ''); saveData(); renderFontOptions(); } }
+function renderFontOptions() { const select = document.getElementById('saved-font-select'); if(!select) return; select.innerHTML = '<option value="system">📱 系统默认字体</option>'; savedFonts.forEach((f, index) => { const opt = document.createElement('option'); opt.value = index; opt.innerText = `🅰️ ${f.name}`; select.appendChild(opt); }); if (!currentTheme.fontName) select.value = 'system'; else { const idx = savedFonts.findIndex(f => f.name === currentTheme.fontName); if(idx !== -1) select.value = idx; } }
+function applyCustomFont(url, name) { const linkTag = document.getElementById('dynamic-font-link'); if (url) linkTag.href = url; else linkTag.href = ""; if (name) document.body.style.fontFamily = `"${name}", -apple-system, BlinkMacSystemFont, sans-serif`; else document.body.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'; }
+function applyTheme() { const c=document.getElementById('main-theme-color').value; const g=document.getElementById('gradient-toggle').checked; const r=document.documentElement; r.style.setProperty('--main-color', c); r.style.setProperty('--theme-gradient', g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c); r.style.setProperty('--theme-shadow', `0 4px 12px ${hexToRgba(c,0.4)}`); currentTheme.color=c; currentTheme.gradient=g; saveData(); closeThemeModal(); }
+function resetTheme() { document.getElementById('main-theme-color').value='#007aff'; document.getElementById('gradient-toggle').checked=true; applyTheme(); }
+function lightenColor(col,amt) { var usePound=false; if(col[0]=="#"){col=col.slice(1);usePound=true;} var num=parseInt(col,16); var r=(num>>16)+amt; if(r>255)r=255;else if(r<0)r=0; var b=((num>>8)&0x00FF)+amt; if(b>255)b=255;else if(b<0)b=0; var g=(num&0x0000FF)+amt; if(g>255)g=255;else if(g<0)g=0; return (usePound?"#":"")+(g|(b<<8)|(r<<16)).toString(16).padStart(6,'0'); }
+function hexToRgba(hex,alpha) { if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){ let c=hex.substring(1).split(''); if(c.length==3)c=[c[0],c[0],c[1],c[1],c[2],c[2]]; c='0x'+c.join(''); return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+','+alpha+')'; } return 'rgba(0,0,0,0.2)'; }
+function updateThemePreview() { const c=document.getElementById('main-theme-color').value; const g=document.getElementById('gradient-toggle').checked; document.getElementById('theme-preview').style.background = g ? `linear-gradient(135deg, ${c}, ${lightenColor(c,40)})` : c; document.getElementById('theme-color-text').value = c; }
+function syncColorFromText() { const textVal = document.getElementById('theme-color-text').value; if (/^#[0-9A-F]{6}$/i.test(textVal)) { document.getElementById('main-theme-color').value = textVal; updateThemePreview(); } }
+function exportAllData() { const d = JSON.stringify({ transactions, memos, todos, passwords, customTags, savedFonts, periods }); const b = new Blob([d], { type: "application/json" }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `backup_all_${new Date().toISOString().slice(0,10)}.json`; a.click(); }
+function clearAllData() { if(confirm("⚠️ 警告：这将清空所有记账、备忘录、密码等数据！\n是否继续？")) { localStorage.removeItem('myAppData'); location.reload(); } }
+function importDataSmart(input) { if (input.files && input.files[0]) { const r = new FileReader(); r.onload = function(e) { try { const d = JSON.parse(e.target.result); if(d.transactions) transactions = [...transactions, ...d.transactions]; if(d.memos) memos = [...memos, ...d.memos]; if(d.todos) todos = [...todos, ...d.todos]; if(d.passwords) passwords = [...passwords, ...d.passwords]; if(d.periods) periods = [...periods, ...d.periods]; if(d.customTags) d.customTags.forEach(t => { if(!customTags.includes(t)) customTags.push(t); }); transactions = Array.from(new Map(transactions.map(item => [item.timestamp, item])).values()); memos = Array.from(new Map(memos.map(item => [item.timestamp, item])).values()); periods = Array.from(new Map(periods.map(item => [item.start, item])).values()); saveData(); alert("导入成功！已智能合并数据。"); location.reload(); } catch(err) { alert("文件格式错误"); } }; r.readAsText(input.files[0]); } }
+function openPasswordModal() { document.getElementById('password-modal').style.setProperty('display', 'flex', 'important'); renderPasswordList(); }
+function closePasswordModal() { document.getElementById('password-modal').style.setProperty('display', 'none', 'important'); resetPassInput(); }
+function resetPassInput() { editingPassId = null; document.getElementById('pass-title').value = ''; document.getElementById('pass-account').value = ''; document.getElementById('pass-secret').value = ''; document.getElementById('pass-url').value = ''; document.getElementById('pass-save-btn').innerText = "添加保存"; document.getElementById('pass-cancel-btn').style.display = 'none'; }
+function savePasswordItem() { const title = document.getElementById('pass-title').value.trim(); const acc = document.getElementById('pass-account').value.trim(); const sec = document.getElementById('pass-secret').value.trim(); const url = document.getElementById('pass-url').value.trim(); if(!title || !sec) { alert("名称和密码必填"); return; } if (editingPassId) { const idx = passwords.findIndex(p => p.id === editingPassId); if(idx !== -1) { passwords[idx] = { id: editingPassId, title, acc, sec, url }; alert("修改成功"); } } else { passwords.push({ id: Date.now(), title, acc, sec, url }); } saveData(); renderPasswordList(); resetPassInput(); }
+function renderPasswordList() { const c = document.getElementById('password-list-container'); c.innerHTML = ''; if(passwords.length===0) { c.innerHTML='<div style="text-align:center;color:#ccc;margin-top:20px;">暂无密码</div>'; return; } passwords.forEach(p => { const d = document.createElement('div'); d.className = 'password-item'; d.innerHTML = `<div class="pass-info"><span class="pass-title">${p.title}</span><span class="pass-detail">👤 ${p.acc}</span><div class="pass-sec-area" onclick="togglePassDisplay(this, '${p.sec}')">******</div></div><div class="pass-actions"><i class="fas fa-pen action-icon" onclick="editPass(${p.id})"></i><i class="fas fa-user action-icon" onclick="copyText('${p.acc}', '账号')"></i><i class="fas fa-key action-icon" onclick="copyText('${p.sec}', '密码')"></i><i class="fas fa-trash action-icon" onclick="delPass(${p.id})"></i></div>`; c.appendChild(d); }); }
+function togglePassDisplay(el, secret) { if(el.innerText === '******') el.innerText = secret; else el.innerText = '******'; }
+function editPass(id) { const p = passwords.find(i => i.id === id); if(p) { editingPassId = id; document.getElementById('pass-title').value = p.title; document.getElementById('pass-account').value = p.acc; document.getElementById('pass-secret').value = p.sec; document.getElementById('pass-url').value = p.url; document.getElementById('pass-save-btn').innerText = "保存修改"; document.getElementById('pass-cancel-btn').style.display = 'block'; } }
+function delPass(id) { if(confirm("删除此密码？")) { passwords = passwords.filter(p => p.id !== id); saveData(); renderPasswordList(); } }
+function exportPasswordsToText() { if(passwords.length === 0) { alert("没有密码可导出"); return; } let txt = "【日月记 - 密码本备份】\n\n"; passwords.forEach(p => { txt += `名称: ${p.title}\n账号: ${p.acc}\n密码: ${p.sec}\n网址: ${p.url || '无'}\n------------------\n`; }); const blob = new Blob([txt], { type: "text/plain;charset=utf-8" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `passwords_backup_${new Date().toISOString().slice(0,10)}.txt`; link.click(); }

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>日月记</title>
+  
+  <link id="dynamic-font-link" rel="stylesheet" href="">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#ffffff">
+</head>
+<body>
+
+  <input type="file" id="item-bg-input" accept="image/*" style="display:none;" onchange="handleItemBgChange(this)">
+  <input type="file" id="card-bg-input-global" accept="image/*" style="display:none;" onchange="handleCardBgGlobalChange(this)">
+
+  <div id="page-accounting" class="page active-page">
+    <header>
+      <div class="header-content">
+        <div class="icon-btn-header" onclick="openThemeModal()"><i class="fas fa-palette"></i></div>
+        <h2 id="title-accounting" onclick="editPageTitle('title-accounting')">💰 本月支出 <i class="fas fa-pen" style="font-size:10px; color:#ddd; margin-left:5px;"></i></h2>
+        <div class="icon-btn-header" onclick="openSettingsModal()"><i class="fas fa-cog"></i></div>
+      </div>
+    </header>
+    <div class="content">
+      <div class="input-group">
+        <input type="number" id="money-input" placeholder="金额 (¥)">
+        <div class="custom-input-row">
+          <input type="text" id="item-input" placeholder="输入用途，或点下方标签">
+          <button class="plus-btn" onclick="addCategoryFromInput()"><i class="fas fa-plus"></i></button>
+        </div>
+        <div class="tags-label">常用标签:</div>
+        <div id="tags-wrapper" class="tags-wrapper"></div>
+        <div class="btn-row">
+           <button class="gradient-btn" onclick="addBill()">记一笔</button>
+           <button class="outline-btn" onclick="showReport()">📊 月总结</button>
+        </div>
+        <button class="text-btn" onclick="toggleAllGroups()" id="toggle-all-btn"><i class="fas fa-compress-alt"></i> 一键收起所有日期</button>
+      </div>
+      <div id="bill-container"></div>
+    </div>
+  </div> 
+
+  <div id="page-memo" class="page" style="display:none;">
+    <header>
+      <div class="header-content">
+        <div class="icon-btn-header" onclick="openPasswordModal()" style="color: #ff9500;"><i class="fas fa-key"></i></div>
+        <h2 id="title-memo" onclick="editPageTitle('title-memo')">📝 个人动态 <i class="fas fa-pen" style="font-size:10px; color:#ddd; margin-left:5px;"></i></h2>
+        <div class="icon-btn-header" onclick="openSettingsModal()"><i class="fas fa-cog"></i></div>
+      </div>
+    </header>
+    <div class="content">
+      <div class="top-bar-row">
+        <div class="view-toggle-bar">
+          <button class="toggle-pill active" onclick="switchMemoView('list', this)">📜 列表</button>
+          <button class="toggle-pill" onclick="switchMemoView('calendar', this)">📅 日历</button>
+          <button class="period-entry-btn" onclick="openPeriodModal()">
+             <i class="fas fa-tint"></i> 生理期助手
+          </button>
+        </div>
+        <div class="filter-actions">
+          <div class="search-box-wrapper">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" id="memo-search-input" placeholder="搜索..." oninput="renderMemos()">
+          </div>
+          <button class="icon-btn-small" onclick="openMemoFilter()" title="按日期筛选"><i class="fas fa-calendar-alt"></i></button>
+          <button class="icon-btn-small" id="clear-filter-btn" onclick="clearMemoFilter()" style="display:none; color:#ff3b30;" title="清除筛选"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+      <div id="filter-status-bar" style="display:none; background:#fff3cd; color:#856404; padding:8px; font-size:12px; border-radius:8px; margin-bottom:15px; text-align:center;">当前显示：<span id="filter-range-text"></span> 的动态</div>
+
+      <div id="memo-view-list">
+        <div class="section-title">📌 待办计划</div>
+        <div class="input-group" style="padding: 15px; margin-bottom: 20px;">
+          <div class="custom-input-row">
+            <input type="text" id="todo-input" placeholder="添加一个新计划...">
+            <button class="plus-btn" onclick="addTodo()"><i class="fas fa-plus"></i></button>
+          </div>
+          <div id="todo-list"></div>
+          <div id="todo-completed-toggle" onclick="toggleCompletedTodos()" style="display:none; text-align:center; margin-top:10px; font-size:12px; color:#aaa; cursor:pointer; padding:5px;">
+              👁️ 查看已完成 (<span id="completed-count">0</span>)
+          </div>
+          <div id="todo-completed-list" style="display:none; opacity:0.6; border-top:1px dashed #eee; margin-top:5px; padding-top:5px;"></div>
+        </div>
+
+        <div class="section-title">📸 发布动态</div>
+        <div class="memo-input-box" id="memo-input-container">
+          <textarea id="memo-input" placeholder="分享当下的想法..."></textarea>
+          
+          <div id="edit-time-container" style="display:none; margin-bottom:10px; border-bottom:1px dashed #eee; padding-bottom:10px;">
+             <label style="font-size:12px; color:#999;">📅 修改时间:</label>
+             <input type="datetime-local" id="memo-edit-time" style="font-size:13px; padding:5px;">
+          </div>
+
+          <div id="image-preview-area" class="image-preview-area" style="display: none;">
+            <img id="preview-img" src="" alt="预览">
+            <div class="remove-img-btn" onclick="clearImage()">×</div>
+          </div>
+
+          <div class="memo-toolbar">
+            <div style="display:flex; gap:10px;">
+                <div class="camera-btn" onclick="triggerFileInput()" title="插入图片">
+                  <i class="fas fa-camera"></i>
+                  <input type="file" id="file-input" accept="image/*" style="display: none;" onchange="handleFileSelect(this)">
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px;">
+              <button id="cancel-memo-edit-btn" class="text-btn" onclick="resetMemoInput()" style="display:none; width:auto; margin:0;">取消</button>
+              <button id="publish-memo-btn" class="gradient-btn" style="width: auto; padding: 8px 20px;" onclick="addMemo()">发布</button>
+            </div>
+          </div>
+        </div>
+        <div id="memo-container"></div>
+        <button id="load-more-btn" class="text-btn" onclick="loadMoreMemos()" style="display:none; margin-top:10px; color:#007aff;">👇 加载更多动态</button>
+      </div>
+
+      <div id="memo-view-calendar" style="display: none;">
+        <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:10px;">
+            <label class="checkbox-label" style="font-size:12px; color:#666;">
+                <input type="checkbox" id="hide-calendar-dates" onchange="toggleCalendarDates()"> 👁️ 隐藏日期
+            </label>
+        </div>
+
+        <div class="calendar-header-row"><h3 id="memo-calendar-title" style="margin:0;"></h3></div>
+        <div class="week-header"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+        <div id="memo-calendar-grid" class="calendar-grid photo-calendar"></div>
+        <p id="memo-calendar-footer" onclick="editCalendarFooter()" style="text-align:center; color:#999; font-size:12px; margin-top:20px; cursor:pointer; border-bottom:1px dashed transparent;">📅 点击格子查看详情 (点我修改签名)</p>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="nav-item active" onclick="switchPage('accounting', this)"><i class="fas fa-wallet"></i><span>记账</span></div>
+    <div class="nav-item" onclick="switchPage('memo', this)"><i class="fas fa-camera-retro"></i><span>动态</span></div>
+  </nav>
+
+  <div id="settings-modal" class="modal">
+    <div class="modal-content" style="max-width: 320px;">
+      <span class="close-btn" onclick="closeSettingsModal()">&times;</span>
+      <h3>⚙️ 数据管理中心</h3>
+      <div style="background: #fff; border: 1px solid #eee; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+        <h4 class="settings-sub-title" style="margin-bottom: 10px;">🔤 字体切换</h4>
+        <select id="saved-font-select" onchange="switchSavedFont()" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ddd; background: #f9f9f9;">
+          <option value="system">📱 系统默认字体</option>
+        </select>
+        <div style="border-top: 1px dashed #ddd; padding-top: 10px;">
+          <input type="text" id="new-font-url" placeholder="🔗 粘贴 CSS 链接" style="margin-bottom: 5px; font-size: 12px; width:100%; box-sizing:border-box;">
+          <input type="text" id="new-font-name" placeholder="📝 输入字体名称 (如: Nunito)" style="margin-bottom: 8px; font-size: 12px; width:100%; box-sizing:border-box;">
+          <div style="display:flex; gap:10px;">
+             <button class="outline-btn" onclick="addNewFont()" style="padding: 6px; font-size: 12px; flex: 2;">➕ 添加</button>
+             <button class="text-btn" onclick="deleteCurrentFont()" style="padding: 6px; font-size: 12px; color: #ff3b30; flex: 1; border: 1px solid #ff3b30; margin-top:0; border-radius:10px;">🗑️ 删除</button>
+          </div>
+        </div>
+      </div>
+      <div style="background: #fff8e1; border: 1px solid #ffeeba; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left;">
+        <h4 class="settings-sub-title" style="margin-bottom: 5px; color:#d39e00;">📉 空间瘦身</h4>
+        <p style="font-size:12px; color:#856404; margin-bottom:10px;">将4个月前的详细账单合并为月度汇总。</p>
+        <button class="outline-btn" onclick="compressOldBills()" style="width:100%; border-color:#d39e00; color:#d39e00; background:white;">🚀 立即压缩</button>
+      </div>
+      <div style="border-top: 1px solid #eee; margin-bottom: 15px;"></div>
+      <h4 class="settings-sub-title">🗑️ 范围删除</h4>
+      <div class="date-range-row"><input type="date" id="del-start-date"><span>至</span><input type="date" id="del-end-date"></div>
+      <div class="checkbox-group"><label class="checkbox-label"><input type="checkbox" id="del-check-bill" checked> 💰 记账</label><label class="checkbox-label"><input type="checkbox" id="del-check-memo" checked> 📝 动态</label></div>
+      <button class="outline-btn" onclick="deleteByDateRange()" style="border-color:#ff3b30; color:#ff3b30; font-size:13px; padding:6px; margin-bottom: 15px; width:100%;">确认删除</button>
+      <div style="border-top: 1px solid #eee; margin-bottom: 15px;"></div>
+      <h4 class="settings-sub-title">📥 范围导出 (备份)</h4>
+      <div class="date-range-row"><input type="date" id="export-start-date"><span>至</span><input type="date" id="export-end-date"></div>
+      <div style="display: flex; gap:10px; margin-bottom:15px;">
+        <button class="outline-btn" onclick="exportDataRange()" style="flex:1; font-size:13px; padding:6px;">导出选中</button>
+        <button class="outline-btn" onclick="exportAllData()" style="flex:1; font-size:13px; padding:6px;">导出全部</button>
+      </div>
+      <div style="position: relative; margin-bottom: 20px;">
+        <button class="outline-btn" style="width: 100%; border-color: #007aff; color: #007aff;"><i class="fas fa-plus-circle"></i> 智能合并导入</button>
+        <input type="file" id="import-file" onchange="importDataSmart(this)" style="position: absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+      </div>
+      <button class="text-btn" onclick="clearAllData()" style="color: #999;"><i class="fas fa-trash-alt"></i> 清空所有数据 (慎点)</button>
+    </div>
+  </div>
+
+  <div id="chart-modal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeReport()">&times;</span>
+      <div class="report-tabs">
+        <div class="tab-btn active-tab" onclick="switchReportTab('chart', this)">消费占比</div>
+        <div class="tab-btn" onclick="switchReportTab('calendar', this)">每日全览</div>
+      </div>
+      <div class="calendar-header-row" style="margin-bottom:15px; font-size:14px;">
+         <i class="fas fa-chevron-left" onclick="changeReportMonth(-1)" style="padding:10px; cursor:pointer; color:#007aff;"></i>
+         <span id="report-month-title" style="font-weight:bold;"></span>
+         <i class="fas fa-chevron-right" onclick="changeReportMonth(1)" style="padding:10px; cursor:pointer; color:#007aff;"></i>
+      </div>
+      
+      <div id="view-chart" class="report-view">
+          <div class="chart-container-wrapper">
+            <canvas id="expense-chart"></canvas>
+          </div>
+      </div>
+      
+      <div id="view-calendar" class="report-view" style="display: none;">
+        <div class="week-header"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="theme-modal" class="modal">
+    <div class="modal-content" style="max-width: 300px;">
+      <span class="close-btn" onclick="closeThemeModal()">&times;</span>
+      <h3>🎨 个性化主题</h3>
+      <div class="theme-control-row">
+        <label>选择主题色:</label>
+        <div class="color-wrapper" style="display:flex; align-items:center; gap:8px;">
+          <input type="color" id="main-theme-color" value="#007aff" onchange="updateThemePreview()">
+          <input type="text" id="theme-color-text" value="#007aff" onchange="syncColorFromText()" style="width:70px; padding:4px; font-size:12px; text-align:center;">
+        </div>
+      </div>
+      <div class="theme-control-row">
+        <label>开启流光渐变:</label><label class="switch"><input type="checkbox" id="gradient-toggle" checked onchange="updateThemePreview()"><span class="slider round"></span></label>
+      </div>
+      <div id="theme-preview" class="theme-preview-box"><span style="color:white; font-weight:bold;">预览 Preview</span></div>
+      <button class="gradient-btn" onclick="applyTheme()" style="margin-top: 20px; width: 100%;">确认应用</button>
+      <button class="text-btn" onclick="resetTheme()" style="margin-top: 10px;">恢复默认蓝</button>
+    </div>
+  </div>
+
+  <div id="period-manage-modal" class="modal">
+    <div class="modal-content" style="max-width: 320px; text-align:left;">
+      <span class="close-btn" onclick="closePeriodModal()">&times;</span>
+      <div class="calendar-header-row">
+        <i class="fas fa-chevron-left" onclick="changePeriodModalMonth(-1)" style="padding:10px; cursor:pointer; color:#999;"></i>
+        <h4 id="period-modal-title" style="margin:0; font-size:16px; min-width: 90px; text-align:center;"></h4>
+        <i class="fas fa-chevron-right" onclick="changePeriodModalMonth(1)" style="padding:10px; cursor:pointer; color:#999;"></i>
+      </div>
+      <div class="week-header"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+      <div id="period-modal-grid" class="calendar-grid period-calendar" style="margin-bottom:20px;"></div>
+      <div style="background:#fff0f6; padding:15px; border-radius:12px; border:1px solid #fcc2d7;">
+        <div style="font-size:14px; color:#d63384; margin-bottom:12px; font-weight:bold; text-align:center;">
+          选中：<span id="selected-period-date" style="color:#333; font-family:'Nunito';">请选择日期</span>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+          <button class="gradient-btn" onclick="setPeriodStart()" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); border:none; box-shadow: 0 4px 10px rgba(255, 154, 158, 0.4); font-size:13px; padding:10px; flex:1;">设为开始</button>
+          <button class="outline-btn" onclick="setPeriodEnd()" style="border-color:#d63384; color:#d63384; font-size:13px; padding:10px; background:white; flex:1;">设为结束</button>
+          <button class="outline-btn" onclick="setPeriodStartOnly()" style="border-color:#aaa; color:#666; font-size:13px; padding:10px; background:white; width:100%;">仅记录开始</button>
+        </div>
+      </div>
+      <h4 style="margin: 20px 0 10px 0; font-size:14px; color:#666; border-bottom:1px solid #eee; padding-bottom:5px;">📜 历史记录 (点击修改)</h4>
+      <div id="period-list-container" style="max-height: 35vh; overflow-y: auto;"></div>
+    </div>
+  </div>
+
+  <div id="date-select-modal" class="modal">
+    <div class="modal-content" style="max-width: 280px;">
+      <span class="close-btn" onclick="closeDateSelectModal()">&times;</span>
+      <h3 style="margin-bottom: 15px;">📅 筛选动态日期</h3>
+      <div class="date-range-row" style="flex-direction:column; align-items:stretch;">
+        <label style="font-size:12px;color:#999">开始日期</label><input type="date" id="common-start-date" style="width:100%">
+        <label style="font-size:12px;color:#999; margin-top:5px;">结束日期</label><input type="date" id="common-end-date" style="width:100%">
+      </div>
+      <button id="date-confirm-btn" class="gradient-btn" style="margin-top: 20px; width: 100%;">确认筛选</button>
+    </div>
+  </div>
+
+  <div id="edit-bill-modal" class="modal">
+    <div class="modal-content" style="max-width: 280px;">
+      <span class="close-btn" onclick="closeEditBillModal()">&times;</span>
+      <h3 style="margin-bottom: 15px;">📅 修改账单日期</h3>
+      <div style="margin-bottom: 20px;">
+        <p style="font-size:14px; color:#666; margin-bottom:10px;">将此笔账单移动到：</p>
+        <input type="date" id="new-bill-date" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px;">
+      </div>
+      <button class="gradient-btn" onclick="saveBillDateChange()" style="width: 100%;">确认修改</button>
+    </div>
+  </div>
+
+  <div id="password-modal" class="modal">
+    <div class="modal-content" style="max-width: 340px; text-align: left;">
+      <span class="close-btn" onclick="closePasswordModal()">&times;</span>
+      <h3 style="text-align:center; margin-bottom:20px;">🔑 密码保险箱</h3>
+      <div class="password-add-box" style="background:#f9f9f9; padding:15px; border-radius:10px; margin-bottom:15px;">
+        <input type="text" id="pass-title" placeholder="名称 (如: 淘宝)" style="margin-bottom:8px;">
+        <input type="text" id="pass-account" placeholder="账号/用户名" style="margin-bottom:8px;">
+        <input type="text" id="pass-secret" placeholder="密码" style="margin-bottom:8px;">
+        <input type="text" id="pass-url" placeholder="网址/备注 (选填)">
+        <button id="pass-save-btn" class="gradient-btn" onclick="savePasswordItem()" style="margin-top:10px; width:100%;">添加保存</button>
+        <button id="pass-cancel-btn" class="text-btn" onclick="resetPassInput()" style="display:none; color:#999; margin-top:5px;">取消修改</button>
+      </div>
+      <div id="password-list-container" style="max-height: 35vh; overflow-y: auto;"></div>
+      <button class="outline-btn" onclick="exportPasswordsToText()" style="width:100%; margin-top:15px; border-color:#999; color:#555; font-size:13px;">
+        <i class="fas fa-file-alt"></i> 导出为文本文件 (TXT)
+      </button>
+      <p style="font-size:12px; color:#ff3b30; text-align:center; margin-top:10px;">⚠️ 仅保存在本地。</p>
+    </div>
+  </div>
+
+  <div id="day-detail-modal" class="modal">
+    <div class="modal-content" style="max-width: 340px; padding: 0; background: transparent; box-shadow: none;">
+      <div style="background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); pointer-events: auto;">
+        <img id="detail-img" src="" style="width: 100%; display: block; object-fit: contain;">
+        <div style="padding: 20px;">
+          <div id="detail-date" style="color: #999; font-size: 12px; margin-bottom: 8px;"></div>
+          <div id="detail-text" style="color: #333; font-size: 16px; line-height: 1.6; white-space: pre-wrap;"></div>
+        </div>
+        <div style="text-align:center; padding:15px; border-top:1px solid #eee; color:#007aff; font-weight:bold; cursor:pointer;" onclick="closeDayDetail()">关闭</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
