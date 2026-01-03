@@ -130,7 +130,11 @@
             </label>
         </div>
 
-        <div class="calendar-header-row"><h3 id="memo-calendar-title" style="margin:0;"></h3></div>
+        <div class="calendar-header-row">
+    <i class="fas fa-chevron-left" onclick="changeMemoMonth(-1)" style="padding:10px; cursor:pointer; color:#999;"></i>
+    <h3 id="memo-calendar-title" style="margin:0;"></h3>
+    <i class="fas fa-chevron-right" onclick="changeMemoMonth(1)" style="padding:10px; cursor:pointer; color:#999;"></i>
+</div>
         <div class="week-header"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
         <div id="memo-calendar-grid" class="calendar-grid photo-calendar"></div>
         <p id="memo-calendar-footer" onclick="editCalendarFooter()" style="text-align:center; color:#999; font-size:12px; margin-top:20px; cursor:pointer; border-bottom:1px dashed transparent;">📅 点击格子查看详情 (点我修改签名)</p>
